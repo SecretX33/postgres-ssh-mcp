@@ -1,0 +1,98 @@
+{
+  "permissions": {
+    "allow": [
+      "Edit(*)",
+      "Glob(*)",
+      "Grep(*)",
+      "LS(*)",
+      "MultiEdit(*)",
+      "Read(*)",
+      "TodoRead(*)",
+      "TodoWrite(*)",
+      "WebSearch",
+      "Write(*)",
+      "Bash(cat:*)",
+      "Bash(chmod:*)",
+      "Bash(cp:*)",
+      "Bash(curl:*)",
+      "Bash(do [ -f \"$file\" ])",
+      "Bash(done)",
+      "Bash(echo \"=== $file ===\")",
+      "Bash(export ENV_FILE=.env)",
+      "Bash(export ENV_FILE=.env.debug)",
+      "Bash(find:*)",
+      "Bash(for file in ./automation/*.py ./automation/**/*.py ./utils/*.py ./run_new_comparison.py)",
+      "Bash(git add:*)",
+      "Bash(git checkout:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git diff:*)",
+      "Bash(git commit:*)",
+      "Bash(git ls-tree:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(grep:*)",
+      "Bash(jar tf:*)",
+      "Bash(ls:*)",
+      "Bash(mkdir:*)",
+      "Bash(mv:*)",
+      "Bash(pkill:*)",
+      "Bash(psql:*)",
+      "Bash(rg:*)",
+      "Bash(rm:*)",
+      "Bash(sed:*)",
+      "Bash(source:*)",
+      "Bash(test:*)",
+      "Bash(timeout:*)",
+      "Bash(true)",
+      "Bash(awk:*)",
+      "Bash(./node_modules/.bin/tsc:*)",
+      "Bash(npx tsc:*)",
+      "Bash(Get-Date -Format \"yyyy-MM-dd\")",
+      "Bash(git show:*)",
+      "Bash(git log:*)",
+      "Bash(pnpm why:*)",
+      "Bash(pnpm list:*)",
+      "Bash(pnpm tsc:*)",
+      "Bash(.txt \")",
+      "Bash(pnpm typecheck:*)",
+      "Bash(pnpm format:fix:*)",
+      "Bash(pnpm turbo run typecheck:*)",
+      "Bash(pnpm eslint:*)",
+      "Bash(pnpm test:*)",
+      "Skill(datadog-trace)",
+      "Bash(export DD_API_KEY=\"7afbe2a2b59ad5bc0ff95da83886200a\")",
+      "Bash(export DD_APP_KEY=\"53ea22d7ae66c457b3bb63910e8424f30c909e6a\")",
+      "Bash(sort:*)",
+      "Bash(xargs:*)",
+      "Skill(commit-push-pr)",
+      "Skill(chat-search)",
+      "Bash(yarn check:*)",
+      "Bash(yarn run check:*)",
+      "mcp__plugin_context7_context7__resolve-library-id",
+      "mcp__plugin_context7_context7__query-docs",
+      "Bash(tail:*)",
+      "Bash(cd:*)"
+    ],
+    "deny": [],
+    "defaultMode": "plan"
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [],
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write(\"outfit-web\")|Edit(\"outfit-web\")|Update(\"outfit-web\")",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"outfit-web\" && pnpm prettier --write './src/**/*.{js,jsx,ts,tsx,css,json}' --cache"
+          }
+        ]
+      }
+    ]
+  },
+  "enabledPlugins": {
+    "figma@claude-plugins-official": true,
+    "frontend-excellence@dotclaude-plugins": true
+  }
+}

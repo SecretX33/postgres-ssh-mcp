@@ -1,0 +1,39 @@
+{
+  "name": "postgres-ssh-mcp",
+  "version": "0.0.1",
+  "description": "MCP server for Postgres (with SSH tunnel support)",
+  "main": "build/server.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "nodemon --watch src --watch .env --ext ts --exec \"tsc && node build/server.js\"",
+    "start": "node build/server.js",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --check --cache src",
+    "format:write": "prettier --write --cache src"
+  },
+  "keywords": [
+    "mcp",
+    "claude",
+    "postgres",
+    "ssh"
+  ],
+  "author": "SecretX33",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.27.1",
+    "dotenv": "17.3.1",
+    "pg": "8.20.0",
+    "tunnel-ssh": "5.2.0",
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "25.4.0",
+    "@types/pg": "8.18.0",
+    "nodemon": "3.1.14",
+    "prettier": "3.8.1",
+    "typescript": "5.9.3",
+    "vitest": "4.0.18"
+  }
+}
