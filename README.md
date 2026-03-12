@@ -6,10 +6,6 @@ Cross-platform MCP server for PostgreSQL with SSH tunnel support. Works on macOS
 
 `postgres-ssh-mcp` exposes MCP tools that allow AI tools to query and introspect PostgreSQL databases. It supports three connection modes:
 
-- **Direct** — connect to Postgres without any SSH tunnel
-- **SSH config** — tunnel through a bastion using an alias from `~/.ssh/config`
-- **Explicit SSH** — tunnel through a bastion using credentials passed as environment variables
-
 ## Connection Modes
 
 | Mode             | When it activates                   | How it connects                                                                              |
@@ -72,7 +68,7 @@ claude mcp add --transport stdio postgres-ssh-mcp \
 
 | Tool             | Description                                                           |
 |------------------|-----------------------------------------------------------------------|
-| `run_query`      | Execute a read-only SQL query (runs inside a `READ ONLY` transaction) |
+| `run_query`      | Execute a SQL query (read-only by default; see `DB_READ_ONLY`)        |
 | `list_schemas`   | List all schemas in the database                                      |
 | `list_tables`    | List tables in a schema (default: `public`)                           |
 | `describe_table` | Show columns, types, and nullability for a table                      |
@@ -93,7 +89,7 @@ These are all environment variables that can be used to configure this MCP serve
 | `SSH_HOSTNAME`                 | No       | —       | Bastion hostname or IP                                   |
 | `SSH_USER`                     | No       | —       | SSH login user                                           |
 | `SSH_PORT`                     | No       | `22`    | SSH port                                                 |
-| `SSH_STRICT_HOST_KEY_CHECKING` | No       | `true`  | Accept `true`/`false`/`yes`/`no`                         |
+| `SSH_STRICT_HOST_KEY_CHECKING` | No       | `true`  | Enables or disables strict host checking                 |
 | `SSH_IDENTITY_FILE`            | No       | —       | Absolute path or `~/...` to private key file             |
 | `SSH_KEY_PASSPHRASE`           | No       | —       | Passphrase for an encrypted private key                  |
 
