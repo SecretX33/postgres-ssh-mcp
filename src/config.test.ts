@@ -440,17 +440,34 @@ describe("EnvSchema", () => {
   });
 
   it("SSH_KEY_PASSPHRASE omitted → undefined", () => {
-    const result = EnvSchema.parse({ DB_HOST: "x", DB_NAME: "x", DB_USER: "x", DB_PASSWORD: "x" });
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+    });
     expect(result.SSH_KEY_PASSPHRASE).toBeUndefined();
   });
 
   it("SSH_KEY_PASSPHRASE '' → undefined", () => {
-    const result = EnvSchema.parse({ DB_HOST: "x", DB_NAME: "x", DB_USER: "x", DB_PASSWORD: "x", SSH_KEY_PASSPHRASE: "" });
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+      SSH_KEY_PASSPHRASE: "",
+    });
     expect(result.SSH_KEY_PASSPHRASE).toBeUndefined();
   });
 
   it("SSH_KEY_PASSPHRASE 'secret' → 'secret'", () => {
-    const result = EnvSchema.parse({ DB_HOST: "x", DB_NAME: "x", DB_USER: "x", DB_PASSWORD: "x", SSH_KEY_PASSPHRASE: "secret" });
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+      SSH_KEY_PASSPHRASE: "secret",
+    });
     expect(result.SSH_KEY_PASSPHRASE).toBe("secret");
   });
 });

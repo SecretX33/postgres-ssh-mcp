@@ -90,11 +90,7 @@ async function runUnsafeQuery(
       content: [
         {
           type: "text",
-          text: JSON.stringify(
-            result.rows,
-            null,
-            2,
-          ),
+          text: JSON.stringify(result.rows, null, 2),
         },
       ],
     };

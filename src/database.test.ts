@@ -1,17 +1,28 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { Pool, type QueryResult } from "pg";
-import { runQuery, runSchemaQuery, runListTables, runDescribeTable, createDatabasePool } from "./database.js";
+import {
+  runQuery,
+  runSchemaQuery,
+  runListTables,
+  runDescribeTable,
+  createDatabasePool,
+} from "./database.js";
 import type { Env } from "./config.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeResult(rows: Record<string, unknown>[], rowCount = rows.length): QueryResult {
+function makeResult(
+  rows: Record<string, unknown>[],
+  rowCount = rows.length,
+): QueryResult {
   return { rows, rowCount, command: "SELECT", oid: 0, fields: [] };
 }
 
-function makePool(queryFn: (sql: string, params?: unknown[]) => Promise<QueryResult> | never) {
+function makePool(
+  queryFn: (sql: string, params?: unknown[]) => Promise<QueryResult> | never,
+) {
   const client = { query: vi.fn().mockImplementation(queryFn), release: vi.fn() };
   const pool = { connect: vi.fn().mockResolvedValue(client) } as unknown as Pool;
   return { pool, client };
@@ -104,7 +115,8 @@ describe("runQuery", () => {
 
   it("client.release() is called even when BEGIN throws", async () => {
     const { pool, client } = makePool((sql) => {
-      if (sql === "BEGIN TRANSACTION READ ONLY") return Promise.reject(new Error("begin failed"));
+      if (sql === "BEGIN TRANSACTION READ ONLY")
+        return Promise.reject(new Error("begin failed"));
       return Promise.resolve(makeResult([]));
     });
     await runQuery(pool, "SELECT 1", true);
@@ -186,7 +198,14 @@ describe("runDescribeTable", () => {
   });
 
   it("returns serialized row objects", async () => {
-    const rows = [{ column_name: "id", data_type: "integer", is_nullable: "NO", column_default: null }];
+    const rows = [
+      {
+        column_name: "id",
+        data_type: "integer",
+        is_nullable: "NO",
+        column_default: null,
+      },
+    ];
     const { pool } = makePool(() => Promise.resolve(makeResult(rows)));
     const result = await runDescribeTable(pool, "public", "users");
     expect(result.isError).toBeUndefined();
@@ -225,7 +244,9 @@ describe("createDatabasePool", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    (Pool.prototype.query as ReturnType<typeof vi.fn>).mockResolvedValue(makeResult([{ ok: 1 }]));
+    (Pool.prototype.query as ReturnType<typeof vi.fn>).mockResolvedValue(
+      makeResult([{ ok: 1 }]),
+    );
   });
 
   afterEach(() => {
@@ -253,11 +274,15 @@ describe("createDatabasePool", () => {
   });
 
   it("calls process.exit(1) when connection test fails", async () => {
-    (Pool.prototype.query as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("connection refused"));
+    (Pool.prototype.query as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("connection refused"),
+    );
     const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => {
       throw new Error("process.exit called");
     });
-    await expect(createDatabasePool(baseEnv, null)).rejects.toThrow("process.exit called");
+    await expect(createDatabasePool(baseEnv, null)).rejects.toThrow(
+      "process.exit called",
+    );
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 });
