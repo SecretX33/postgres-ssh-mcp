@@ -4,22 +4,22 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to release (e.g. 1.2.3 or v1.2.3). If omitted, auto-increments from latest tag.'
+        description: 'Version to release (e.g. 1.2.3 or v1.2.3). If omitted, auto-increments from latest tag'
         required: false
         type: string
       dry_run:
-        description: 'If true, build and compute version but skip creating the GitHub release.'
+        description: 'Dry-run (skip creating a release)'
         required: false
         type: boolean
         default: false
   workflow_call:
     inputs:
       version:
-        description: 'Version to release (e.g. 1.2.3 or v1.2.3). If omitted, auto-increments from latest tag.'
+        description: 'Version to release (e.g. 1.2.3 or v1.2.3). If omitted, auto-increments from latest tag'
         required: false
         type: string
       dry_run:
-        description: 'If true, build and compute version but skip creating the GitHub release.'
+        description: 'Dry-run (skip creating a release)'
         required: false
         type: boolean
         default: false
@@ -55,10 +55,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 22
 

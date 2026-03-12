@@ -1,4 +1,4 @@
-name: Unpublish from npm
+name: Unpublish from NPM
 
 on:
   workflow_dispatch:
@@ -43,7 +43,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Sanitize version
         id: sanitize
@@ -62,24 +65,24 @@ jobs:
           fi
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
         with:
           version: 10
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
 
-      - name: Unpublish from npm
+      - name: Unpublish from NPM
         if: startsWith(inputs.mode, 'unpublish')
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           VERSION: ${{ steps.sanitize.outputs.version }}
         run: npm unpublish "postgres-ssh-mcp@${VERSION}"
 
-      - name: Deprecate on npm
+      - name: Deprecate on NPM
         if: startsWith(inputs.mode, 'deprecate')
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
