@@ -1,0 +1,115 @@
+name: Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (e.g. 1.2.3 or v1.2.3). If omitted, auto-increments patch from latest tag.'
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      version:
+        description: 'Version to build (e.g. 1.2.3 or v1.2.3). If omitted, auto-increments patch from latest tag.'
+        required: false
+        type: string
+    outputs:
+      version:
+        description: 'Resolved package version (e.g. 1.2.3)'
+        value: ${{ jobs.build.outputs.version }}
+      tag:
+        description: 'Git tag (e.g. v1.2.3)'
+        value: ${{ jobs.build.outputs.tag }}
+      artifact_name:
+        description: 'Filename of the uploaded .tgz artifact'
+        value: ${{ jobs.build.outputs.artifact_name }}
+
+jobs:
+  build:
+    if: github.repository == 'SecretX33/postgres-ssh-mcp'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve-version.outputs.version }}
+      tag: ${{ steps.resolve-version.outputs.tag }}
+      artifact_name: ${{ steps.artifact.outputs.artifact_name }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Sanitize provided version
+        id: sanitize
+        if: inputs.version != ''
+        uses: ./.github/actions/sanitize-version
+        with:
+          version: ${{ inputs.version }}
+
+      - name: Auto-increment version from tags
+        id: auto-version
+        if: inputs.version == ''
+        run: |
+          latest_tag=$(git tag --list 'v*' --sort=-v:refname | head -n 1)
+          if [ -z "$latest_tag" ]; then
+            echo "No existing tags found, defaulting to v0.0.1"
+            latest_tag="v0.0.0"
+          fi
+
+          base="${latest_tag#v}"
+          IFS='.' read -r major minor patch <<< "$base"
+          patch=$((patch + 1))
+          version="${major}.${minor}.${patch}"
+          tag="v${version}"
+
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "Auto-incremented version: ${version} (from tag: ${latest_tag})"
+
+      - name: Resolve version
+        id: resolve-version
+        run: |
+          version="${{ steps.sanitize.outputs.version || steps.auto-version.outputs.version }}"
+          tag="${{ steps.sanitize.outputs.tag || steps.auto-version.outputs.tag }}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "Resolved version: ${version}, tag: ${tag}"
+
+      - name: Set package version
+        run: pnpm version "${{ steps.resolve-version.outputs.version }}" --no-git-tag-version --allow-same-version
+
+      - name: Build
+        run: pnpm build
+
+      - name: Pack
+        run: pnpm pack
+
+      - name: Capture artifact filename
+        id: artifact
+        run: |
+          tgz=$(ls *.tgz)
+          echo "artifact_name=${tgz}" >> "$GITHUB_OUTPUT"
+          echo "Artifact: ${tgz}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-tgz
+          path: ${{ steps.artifact.outputs.artifact_name }}
+          retention-days: 7
+          if-no-files-found: error

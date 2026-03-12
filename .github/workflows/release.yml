@@ -1,0 +1,99 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g. 1.2.3 or v1.2.3). If omitted, auto-increments from latest tag.'
+        required: false
+        type: string
+      dry_run:
+        description: 'If true, build and compute version but skip creating the GitHub release.'
+        required: false
+        type: boolean
+        default: false
+  workflow_call:
+    inputs:
+      version:
+        description: 'Version to release (e.g. 1.2.3 or v1.2.3). If omitted, auto-increments from latest tag.'
+        required: false
+        type: string
+      dry_run:
+        description: 'If true, build and compute version but skip creating the GitHub release.'
+        required: false
+        type: boolean
+        default: false
+    outputs:
+      version:
+        description: 'Resolved package version (e.g. 1.2.3)'
+        value: ${{ jobs.call-build.outputs.version }}
+      tag:
+        description: 'Git tag (e.g. v1.2.3)'
+        value: ${{ jobs.call-build.outputs.tag }}
+      artifact_name:
+        description: 'Filename of the .tgz artifact'
+        value: ${{ jobs.call-build.outputs.artifact_name }}
+
+permissions:
+  contents: write
+
+jobs:
+  call-build:
+    if: github.repository == 'SecretX33/postgres-ssh-mcp'
+    uses: ./.github/workflows/build.yml
+    with:
+      version: ${{ inputs.version }}
+
+  release:
+    if: github.repository == 'SecretX33/postgres-ssh-mcp'
+    needs: call-build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: package-tgz
+
+      - name: Verify version in artifact
+        env:
+          VERSION: ${{ needs.call-build.outputs.version }}
+          ARTIFACT: ${{ needs.call-build.outputs.artifact_name }}
+        run: |
+          tar -xzf "$ARTIFACT" --strip-components=1 package/package.json
+          FILE_VERSION=$(node -p "require('./package.json').version")
+          if [ "$VERSION" != "$FILE_VERSION" ]; then
+            echo "::error::Version mismatch: expected=$VERSION, package.json=$FILE_VERSION"
+            exit 1
+          fi
+          echo "Version verified: $FILE_VERSION"
+
+      - name: Create GitHub release
+        if: inputs.dry_run != true
+        env:
+          TAG: ${{ needs.call-build.outputs.tag }}
+          ARTIFACT: ${{ needs.call-build.outputs.artifact_name }}
+        run: |
+          gh release create "$TAG" "$ARTIFACT" \
+            --repo "${{ github.repository }}" \
+            --title "$TAG"
+
+      - name: Dry run notice
+        if: inputs.dry_run == true
+        env:
+          TAG: ${{ needs.call-build.outputs.tag }}
+          ARTIFACT: ${{ needs.call-build.outputs.artifact_name }}
+        run: |
+          echo "::notice::Dry run mode. Would have created release $TAG with artifact $ARTIFACT"

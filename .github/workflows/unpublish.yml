@@ -1,0 +1,88 @@
+name: Unpublish from npm
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to unpublish or deprecate (e.g. 1.2.3 or v1.2.3).'
+        required: true
+        type: string
+      mode:
+        description: 'Action to perform.'
+        required: true
+        type: choice
+        options:
+          - unpublish (within 24h only)
+          - deprecate
+      deprecation_message:
+        description: 'Deprecation message (required for "deprecate" mode, ignored for "unpublish").'
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      version:
+        description: 'Version to unpublish or deprecate (e.g. 1.2.3 or v1.2.3).'
+        required: true
+        type: string
+      mode:
+        description: 'Action to perform: "unpublish" (within 24h only) or "deprecate".'
+        required: true
+        type: string
+      deprecation_message:
+        description: 'Deprecation message (required for "deprecate" mode, ignored for "unpublish").'
+        required: false
+        type: string
+    secrets:
+      NPM_TOKEN:
+        required: true
+
+jobs:
+  unpublish:
+    if: github.repository == 'SecretX33/postgres-ssh-mcp'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Sanitize version
+        id: sanitize
+        uses: ./.github/actions/sanitize-version
+        with:
+          version: ${{ inputs.version }}
+
+      - name: Validate inputs
+        env:
+          MODE: ${{ inputs.mode }}
+          DEPRECATION_MESSAGE: ${{ inputs.deprecation_message }}
+        run: |
+          if [[ "$MODE" == deprecate* ]] && [ -z "$DEPRECATION_MESSAGE" ]; then
+            echo "::error::Deprecation message is required when using 'deprecate' mode."
+            exit 1
+          fi
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - name: Unpublish from npm
+        if: startsWith(inputs.mode, 'unpublish')
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          VERSION: ${{ steps.sanitize.outputs.version }}
+        run: npm unpublish "postgres-ssh-mcp@${VERSION}"
+
+      - name: Deprecate on npm
+        if: startsWith(inputs.mode, 'deprecate')
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          VERSION: ${{ steps.sanitize.outputs.version }}
+          DEPRECATION_MESSAGE: ${{ inputs.deprecation_message }}
+        run: npm deprecate "postgres-ssh-mcp@${VERSION}" "$DEPRECATION_MESSAGE"
