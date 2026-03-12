@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import dotenv from "dotenv";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -10,11 +11,11 @@ import {
   createDatabasePool,
   runDescribeTable,
   runListTables,
-  runReadOnlyQuery,
+  runQuery,
   runSchemaQuery,
 } from "./database.js";
 
-function buildServer(pool: Pool): McpServer {
+export function buildServer(pool: Pool, readOnly: boolean): McpServer {
   const server = new McpServer({
     name: PROJECT_INFO.name,
     version: PROJECT_INFO.version,
@@ -23,14 +24,14 @@ function buildServer(pool: Pool): McpServer {
   server.registerTool(
     "run_query",
     {
-      description:
-        "Execute a read-only SQL query against the PostgreSQL database and return the results. " +
-        "All queries run inside a READ ONLY transaction.",
+      description: readOnly
+        ? "Execute a read-only SQL query against the PostgreSQL database and return the results. All queries run inside a READ ONLY transaction."
+        : "Execute a SQL query against the PostgreSQL database and return the results.",
       inputSchema: z.object({
         sql: z.string().describe("The SQL query to execute"),
       }),
     },
-    ({ sql }) => runReadOnlyQuery(pool, sql),
+    ({ sql }) => runQuery(pool, sql, readOnly),
   );
 
   server.registerTool(
@@ -66,7 +67,7 @@ function buildServer(pool: Pool): McpServer {
 }
 
 async function main() {
-  if (process.env.NODE_ENV !== "production") {
+  if (process.env.NODE_ENV && process.env.NODE_ENV !== "production") {
     dotenv.config();
   }
   const env = loadEnvOrExit();
@@ -75,14 +76,14 @@ async function main() {
   const sshTunnel = await buildSshTunnel(env, sshConfig);
   const pool = await createDatabasePool(env, sshTunnel);
 
-  const server = buildServer(pool);
+  const server = buildServer(pool, env.DB_READ_ONLY);
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
-  console.info("Postgres SSH MCP server ready");
+  console.error("Postgres SSH MCP server ready");
 
   const cleanup = async () => {
-    console.info("Shutting down...");
+    console.error("Shutting down...");
     await pool.end().catch(() => {});
     sshTunnel?.close();
     process.exit(0);

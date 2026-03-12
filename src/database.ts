@@ -5,13 +5,19 @@ import type { ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 export type ToolResult = Awaited<ReturnType<ToolCallback>>;
 
-export async function runReadOnlyQuery(pool: Pool, sql: string): Promise<ToolResult> {
+export async function runQuery(
+  pool: Pool,
+  sql: string,
+  readOnly: boolean,
+): Promise<ToolResult> {
   const client = await pool.connect();
   let startedTransaction = false;
 
   try {
-    await client.query("BEGIN TRANSACTION READ ONLY");
-    startedTransaction = true;
+    if (readOnly) {
+      await client.query("BEGIN TRANSACTION READ ONLY");
+      startedTransaction = true;
+    }
     const result = await client.query(sql);
 
     const text =
@@ -35,7 +41,7 @@ export async function runReadOnlyQuery(pool: Pool, sql: string): Promise<ToolRes
   } finally {
     if (startedTransaction) {
       await client.query("ROLLBACK").catch((e) => {
-        console.debug("Error rolling back transaction:", e);
+        console.error("Error rolling back transaction:", e);
       });
     }
     client.release();
@@ -85,7 +91,7 @@ async function runUnsafeQuery(
         {
           type: "text",
           text: JSON.stringify(
-            result.rows.map((r) => r.schema_name),
+            result.rows,
             null,
             2,
           ),
@@ -131,7 +137,7 @@ async function testDatabaseConnection(db: Pool) {
   try {
     const res = await db.query("SELECT 1 AS ok");
 
-    console.info(`Database connection test successful: ${res.rows[0].ok}`);
+    console.error(`Database connection test successful: ${res.rows[0].ok}`);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`Database connection test failed: ${message}`);

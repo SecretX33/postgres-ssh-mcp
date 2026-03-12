@@ -18,11 +18,11 @@ export async function buildSshTunnel(
   sshConfig: SshHostConfig | null,
 ): Promise<TunnelInfo | null> {
   if (!sshConfig) {
-    console.info(`Connecting directly to Postgres at ${env.DB_HOST}:${env.DB_PORT}`);
+    console.error(`Connecting directly to Postgres at ${env.DB_HOST}:${env.DB_PORT}`);
     return null;
   }
 
-  console.info(
+  console.error(
     `Connecting to SSH bastion ${sshConfig.hostname}:${sshConfig.port} as ${sshConfig.user}...`,
   );
 
@@ -30,7 +30,7 @@ export async function buildSshTunnel(
     host: sshConfig.hostname,
     port: sshConfig.port,
     username: sshConfig.user,
-    readyTimeout: 5000,
+    readyTimeout: 10000,
   };
 
   if (sshConfig.identityFile) {
@@ -40,10 +40,11 @@ export async function buildSshTunnel(
     sshOptions.privateKey = fs.readFileSync(sshConfig.identityFile);
   }
 
+  if (env.SSH_KEY_PASSPHRASE) {
+    sshOptions.passphrase = env.SSH_KEY_PASSPHRASE;
+  }
+
   if (!sshConfig.strictHostKeyChecking) {
-    console.error(
-      "WARNING: SSH host key verification is disabled. This makes you vulnerable to MITM attacks.",
-    );
     sshOptions.hostVerifier = () => true;
   }
 
@@ -57,13 +58,14 @@ export async function buildSshTunnel(
     forwardOptions,
   );
 
-  client.on("error", (err) => {
-    console.error(`Fatal: SSH tunnel error after connection: ${err.message}`);
+  client.on("error", (err: unknown) => {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`Fatal: SSH tunnel error after connection: ${message}`);
     process.exit(1);
   });
 
   const addr = server.address() as net.AddressInfo;
-  console.info(`SSH tunnel established on local port ${addr.port}`);
+  console.error(`SSH tunnel established on local port ${addr.port}`);
 
   return {
     localPort: addr.port,

@@ -3,21 +3,31 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 
+const booleanType = z.enum(["true", "false"]).transform((value) => value === "true");
+const nonEmptyString = z.string().min(1);
+const nonEmptyOptionalString = z.string().transform(convertEmptyToUndefined).optional();
+
+function convertEmptyToUndefined<T>(value: T | null | undefined): T | undefined {
+  return !value ? undefined : value;
+}
+
 export const EnvSchema = z
   .object({
-    DB_HOST: z.string(),
+    DB_HOST: nonEmptyString,
     DB_PORT: z.coerce.number().int().min(1).max(65535).default(5432),
-    DB_NAME: z.string(),
-    DB_USER: z.string(),
-    DB_PASSWORD: z.string(),
+    DB_NAME: nonEmptyString,
+    DB_USER: nonEmptyString,
+    DB_PASSWORD: nonEmptyString,
+    DB_READ_ONLY: booleanType.default(true),
     // Mode 1: SSH config file alias
-    SSH_HOST: z.string().optional(),
+    SSH_HOST: nonEmptyOptionalString,
     // Mode 2: explicit SSH connection
-    SSH_HOSTNAME: z.string().optional(),
-    SSH_USER: z.string().optional(),
+    SSH_HOSTNAME: nonEmptyOptionalString,
+    SSH_USER: nonEmptyOptionalString,
     SSH_PORT: z.coerce.number().int().min(1).max(65535).optional(),
-    SSH_STRICT_HOST_KEY_CHECKING: z.string().optional().default("true"),
-    SSH_IDENTITY_FILE: z.string().optional(),
+    SSH_STRICT_HOST_KEY_CHECKING: booleanType.default(true),
+    SSH_IDENTITY_FILE: nonEmptyOptionalString,
+    SSH_KEY_PASSPHRASE: nonEmptyOptionalString,
   })
   .superRefine((data, ctx) => {
     const hasHost = data.SSH_HOST !== undefined;
@@ -162,9 +172,7 @@ export function resolveSshConfig(env: Env, sshConfigPath?: string): SshHostConfi
       identityFile: env.SSH_IDENTITY_FILE?.startsWith("~/")
         ? path.join(os.homedir(), env.SSH_IDENTITY_FILE.slice(2))
         : env.SSH_IDENTITY_FILE,
-      strictHostKeyChecking: !["false", "no"].includes(
-        env.SSH_STRICT_HOST_KEY_CHECKING.toLowerCase(),
-      ),
+      strictHostKeyChecking: env.SSH_STRICT_HOST_KEY_CHECKING,
     };
   }
   // Mode 3: no SSH — direct Postgres connection

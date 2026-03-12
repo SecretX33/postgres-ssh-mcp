@@ -2,17 +2,13 @@
   "name": "postgres-ssh-mcp",
   "version": "0.0.1",
   "description": "MCP server for Postgres (with SSH tunnel support)",
-  "main": "build/server.js",
   "type": "module",
-  "scripts": {
-    "build": "tsc",
-    "dev": "nodemon --watch src --watch .env --ext ts --exec \"tsc && node build/server.js\"",
-    "start": "node build/server.js",
-    "test": "vitest run",
-    "typecheck": "tsc --noEmit",
-    "format": "prettier --check --cache src",
-    "format:write": "prettier --write --cache src"
-  },
+  "main": "dist/server.js",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "keywords": [
     "mcp",
     "claude",
@@ -21,6 +17,27 @@
   ],
   "author": "SecretX33",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SecretX33/postgres-ssh-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/SecretX33/postgres-ssh-mcp/issues"
+  },
+  "homepage": "https://github.com/SecretX33/postgres-ssh-mcp#readme",
+  "bin": {
+    "postgres-ssh-mcp": "dist/server.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc -w",
+    "dev": "nodemon --watch src --watch .env --ext ts --exec \"tsc && node dist/server.js\"",
+    "start": "node dist/server.js",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --check --cache src",
+    "format:write": "prettier --write --cache src"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.27.1",
     "dotenv": "17.3.1",
@@ -31,6 +48,7 @@
   "devDependencies": {
     "@types/node": "25.4.0",
     "@types/pg": "8.18.0",
+    "@types/ssh2": "1.15.5",
     "nodemon": "3.1.14",
     "prettier": "3.8.1",
     "typescript": "5.9.3",
