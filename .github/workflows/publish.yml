@@ -1,0 +1,51 @@
+name: Publish to npm
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: 'Git tag of the release to publish (e.g. v1.2.3 or 1.2.3).'
+        required: true
+        type: string
+    secrets:
+      NPM_TOKEN:
+        required: true
+
+jobs:
+  publish:
+    if: github.repository == 'SecretX33/postgres-ssh-mcp'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Sanitize tag
+        id: sanitize
+        uses: ./.github/actions/sanitize-version
+        with:
+          version: ${{ inputs.tag }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - name: Download release asset
+        run: gh release download "${{ steps.sanitize.outputs.tag }}" --pattern "*.tgz"
+
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: pnpm publish *.tgz --no-git-checks --access public --provenance

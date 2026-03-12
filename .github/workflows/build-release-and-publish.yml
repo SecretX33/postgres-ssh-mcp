@@ -1,0 +1,29 @@
+name: Build, Release & Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g. 1.2.3 or v1.2.3). Leave empty to auto-increment patch from latest tag.'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  release:
+    if: github.repository == 'SecretX33/postgres-ssh-mcp'
+    uses: ./.github/workflows/release.yml
+    with:
+      version: ${{ inputs.version }}
+
+  publish:
+    if: github.repository == 'SecretX33/postgres-ssh-mcp'
+    needs: release
+    uses: ./.github/workflows/publish.yml
+    with:
+      tag: ${{ needs.release.outputs.tag }}
+    secrets:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
