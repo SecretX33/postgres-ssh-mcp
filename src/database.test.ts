@@ -224,6 +224,31 @@ describe("runDescribeTable", () => {
 // createDatabasePool
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// runQuery – validation integration
+// ---------------------------------------------------------------------------
+
+describe("runQuery – validation integration", () => {
+  it("returns isError response for DELETE statement", async () => {
+    const { pool } = makePool(() => Promise.resolve(makeResult([])));
+    const result = await runQuery(pool, "DELETE FROM t", false);
+    expect(result.isError).toBe(true);
+    expect((result.content[0] as { text: string }).text).toMatch(/DELETE/i);
+  });
+
+  it("returns isError response for multi-statement input", async () => {
+    const { pool } = makePool(() => Promise.resolve(makeResult([])));
+    const result = await runQuery(pool, "SELECT 1; DROP TABLE t", false);
+    expect(result.isError).toBe(true);
+  });
+
+  it("passes a valid SELECT through to the pool", async () => {
+    const { pool } = makePool(() => Promise.resolve(makeResult([{ id: 1 }])));
+    const result = await runQuery(pool, "SELECT 1", false);
+    expect(result.isError).toBeUndefined();
+  });
+});
+
 vi.mock("pg", () => {
   const Pool = vi.fn();
   Pool.prototype.on = vi.fn();
