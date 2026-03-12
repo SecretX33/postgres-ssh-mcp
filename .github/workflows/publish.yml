@@ -1,6 +1,12 @@
 name: Publish to npm
 
 on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Git tag of the release to publish (e.g. v1.2.3 or 1.2.3).'
+        required: true
+        type: string
   workflow_call:
     inputs:
       tag:
@@ -10,6 +16,10 @@ on:
     secrets:
       NPM_TOKEN:
         required: true
+
+permissions:
+  contents: read
+  id-token: write
 
 jobs:
   publish:

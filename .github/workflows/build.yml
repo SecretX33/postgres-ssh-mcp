@@ -1,6 +1,12 @@
 name: Build
 
 on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (e.g. 1.2.3 or v1.2.3). If omitted, auto-increments patch from latest tag.'
+        required: false
+        type: string
   workflow_call:
     inputs:
       version:
