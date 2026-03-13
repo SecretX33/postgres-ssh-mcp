@@ -31,7 +31,7 @@
   "scripts": {
     "build": "tsc",
     "build:watch": "tsc -w",
-    "dev": "nodemon --watch src --watch .env --ext ts --exec \"tsc && node dist/server.js\"",
+    "dev": "dotenv -v NODE_ENV=development -- nodemon --watch src --watch .env --ext ts --exec \"tsc && node dist/server.js\"",
     "start": "node dist/server.js",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
@@ -51,6 +51,7 @@
     "@types/node": "25.4.0",
     "@types/pg": "8.18.0",
     "@types/ssh2": "1.15.5",
+    "dotenv-cli": "11.0.0",
     "nodemon": "3.1.14",
     "prettier": "3.8.1",
     "typescript": "5.9.3",

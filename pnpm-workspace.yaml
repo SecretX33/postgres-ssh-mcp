@@ -1,0 +1,18 @@
+# Implements various measures to mitigate Supply Chain Attacks. See https://pnpm.io/blog/2025/12/05/newsroom-npm-supply-chain-security
+
+strictDepBuilds: true       # Block lifecycle scripts by default (no arbitrary code execution during 'pnpm install' unless explicitly allowed)
+minimumReleaseAge: 10080    # Release Cooldown: the minimum release age for a package to be allowed to be installed (in minutes, 7 days)
+trustPolicy: no-downgrade   # Blocks installation when a package version has weaker authentication than previously published versions
+blockExoticSubdeps: true    # Prevent installation of exotic subdependencies (e.g., git repositories, local paths, etc.). See: https://pnpm.io/blog/releases/10.26#blockexoticsubdeps
+
+## Configure build script execution permission. Explicitly allows (true) or disallows (false) script execution per package
+#allowBuilds:
+#  esbuild: true           # Optimizes out the JavaScript shim by the actual native binary for faster builds (https://github.com/evanw/esbuild/issues/4085)
+
+# When applying certain hotfixed packages, uncomment this and list them here to exempt them from the minimumReleaseAge control
+# minimumReleaseAgeExclude:
+#  - package-with-critical-hotfix@1.2.3
+
+# When applying certain packages that have migrated their CI/CD to a less secure system, uncomment this and list them here to exempt them from the trustPolicy control
+#trustPolicyExclude:
+#  - vite@6.4.1
