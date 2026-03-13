@@ -31,7 +31,7 @@ const ALLOWED_STATEMENT_TYPES = new Set(["SelectStmt", "ExplainStmt"]);
  * privileges (e.g. `pg_read_all_data`). The parser is the application-level
  * gate; the DB role is the enforcement layer.
  */
-export async function validateQuery(sql: string): Promise<void> {
+export async function validateReadOnlyQuery(sql: string): Promise<void> {
   // Stage 2 pre-check — empty before parse
   if (sql.trim() === "") {
     throw new ValidationError("EMPTY_QUERY", "Query is empty");

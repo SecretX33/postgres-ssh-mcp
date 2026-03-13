@@ -2,7 +2,7 @@ import { Pool, type PoolClient, type QueryResult } from "pg";
 import type { TunnelInfo } from "./ssh-tunnel.js";
 import type { Env } from "./config.js";
 import type { ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { validateQuery, ValidationError } from "./sql-validator.js";
+import { validateReadOnlyQuery, ValidationError } from "./sql-validator.js";
 
 export type ToolResult = Awaited<ReturnType<ToolCallback>>;
 
@@ -11,16 +11,18 @@ export async function runQuery(
   sql: string,
   readOnly: boolean,
 ): Promise<ToolResult> {
-  try {
-    await validateQuery(sql);
-  } catch (err) {
-    if (err instanceof ValidationError) {
-      return {
-        content: [{ type: "text", text: err.message }],
-        isError: true,
-      };
+  if (readOnly) {
+    try {
+      await validateReadOnlyQuery(sql);
+    } catch (err) {
+      if (err instanceof ValidationError) {
+        return {
+          content: [{ type: "text", text: err.message }],
+          isError: true,
+        };
+      }
+      throw err;
     }
-    throw err;
   }
 
   const client = await pool.connect();
@@ -53,9 +55,7 @@ export async function runQuery(
     };
   } finally {
     if (startedTransaction) {
-      await client.query("ROLLBACK").catch((e) => {
-        console.error("Error rolling back transaction:", e);
-      });
+      await client.query("ROLLBACK").catch(() => {});
     }
     client.release();
   }
