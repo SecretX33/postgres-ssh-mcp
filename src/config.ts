@@ -18,6 +18,7 @@ export const EnvSchema = z
     DB_NAME: NonEmptyString,
     DB_USER: NonEmptyString,
     DB_PASSWORD: NonEmptyString,
+    DB_CONNECTION_POOL_SIZE: z.coerce.number().int().min(1).default(5),
     DB_READ_ONLY: BooleanType.default(true),
     DB_SSL: BooleanType.default(false),
     // Mode 1: SSH config file alias

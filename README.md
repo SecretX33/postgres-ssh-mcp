@@ -93,6 +93,7 @@ These are all environment variables that can be used to configure this MCP serve
 | `DB_PORT`                      | `5432`  | Postgres port                                            |
 | `DB_READ_ONLY`                 | `true`  | Set to `false` to allow write queries (`run_query` only) |
 | `DB_SSL`                       | `false` | Enable TLS for the database connection                   |
+| `DB_CONNECTION_POOL_SIZE`      | `5`     | Maximum number of connections in the pool                |
 | `SSH_HOST`                     | —       | SSH config alias (reads `~/.ssh/config`)                 |
 | `SSH_HOSTNAME`                 | —       | Bastion hostname or IP                                   |
 | `SSH_USER`                     | —       | SSH login user                                           |

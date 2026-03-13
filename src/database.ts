@@ -130,7 +130,7 @@ export async function createDatabasePool(
     database: env.DB_NAME,
     user: env.DB_USER,
     password: env.DB_PASSWORD,
-    max: 5,
+    max: env.DB_CONNECTION_POOL_SIZE,
     connectionTimeoutMillis: 10000,
     ssl: env.DB_SSL,
   });
