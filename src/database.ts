@@ -42,6 +42,17 @@ export async function runQuery(
       content: [{ type: "text", text: text }],
     };
   } catch (err) {
+    if (err instanceof Error && err.message === "Query read timeout") {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Query timed out. The query exceeded the configured time limit (${pool.options.query_timeout}s). Try simplifying the query or increasing DB_QUERY_TIMEOUT_SECONDS.`,
+          },
+        ],
+        isError: true,
+      };
+    }
     return {
       content: [
         {
@@ -131,7 +142,8 @@ export async function createDatabasePool(
     user: env.DB_USER,
     password: env.DB_PASSWORD,
     max: env.DB_CONNECTION_POOL_SIZE,
-    connectionTimeoutMillis: 10000,
+    connectionTimeoutMillis: env.DB_CONNECTION_TIMEOUT_MS,
+    query_timeout: env.DB_QUERY_TIMEOUT_SECONDS,
     ssl: env.DB_SSL,
   });
   db.on("error", (err) => {

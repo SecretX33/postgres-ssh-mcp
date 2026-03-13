@@ -122,6 +122,21 @@ describe("runQuery", () => {
     await runQuery(pool, "SELECT 1", true);
     expect(client.release).toHaveBeenCalledOnce();
   });
+
+  it("returns isError=true with friendly timeout message when query throws 'Query read timeout'", async () => {
+    const { pool } = makePool((sql) => {
+      if (sql === "BEGIN TRANSACTION READ ONLY") return Promise.resolve(makeResult([]));
+      return Promise.reject(new Error("Query read timeout"));
+    });
+    (pool as unknown as { options: { query_timeout: number } }).options = {
+      query_timeout: 5000,
+    };
+    const result = await runQuery(pool, "SELECT 1", false);
+    expect(result.isError).toBe(true);
+    const text = (result.content[0] as { text: string }).text;
+    expect(text).toContain("timed out");
+    expect(text).toContain("5000");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -265,6 +280,9 @@ describe("createDatabasePool", () => {
     DB_PASSWORD: "pass",
     DB_READ_ONLY: true,
     DB_SSL: false,
+    DB_CONNECTION_POOL_SIZE: 5,
+    DB_CONNECTION_TIMEOUT_MS: 10000,
+    DB_QUERY_TIMEOUT_SECONDS: 15,
     SSH_STRICT_HOST_KEY_CHECKING: true,
   };
 
@@ -292,6 +310,18 @@ describe("createDatabasePool", () => {
     expect(Pool).toHaveBeenCalledWith(
       expect.objectContaining({ host: "db.example.com", port: 5432 }),
     );
+  });
+
+  it("constructs Pool with connectionTimeoutMillis from DB_CONNECTION_TIMEOUT_MS", async () => {
+    await createDatabasePool({ ...baseEnv, DB_CONNECTION_TIMEOUT_MS: 7500 }, null);
+    expect(Pool).toHaveBeenCalledWith(
+      expect.objectContaining({ connectionTimeoutMillis: 7500 }),
+    );
+  });
+
+  it("constructs Pool with query_timeout from DB_QUERY_TIMEOUT_SECONDS", async () => {
+    await createDatabasePool({ ...baseEnv, DB_QUERY_TIMEOUT_SECONDS: 30 }, null);
+    expect(Pool).toHaveBeenCalledWith(expect.objectContaining({ query_timeout: 30 }));
   });
 
   it("returns the pool when connection test succeeds", async () => {
