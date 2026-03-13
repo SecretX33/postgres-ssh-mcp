@@ -23,9 +23,7 @@ on:
         required: false
         type: boolean
         default: false
-    secrets:
-      NPM_TOKEN:
-        required: true
+
 permissions:
   contents: read
   id-token: write
