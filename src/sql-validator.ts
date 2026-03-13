@@ -257,15 +257,15 @@ const DANGEROUS_FUNCTIONS = new Set([
   "table_to_xmlschema",
 
   // --- Non-standard / suspicious ---
-  "system",                    // not a standard PG catalog function; can appear via extensions
-  "set_limit",                 // pg_trgm: sets session-level similarity threshold (state mutation)
+  "system", // not a standard PG catalog function; can appear via extensions
+  "set_limit", // pg_trgm: sets session-level similarity threshold (state mutation)
 
   // --- PostGIS admin functions (execute internal DDL/DML via EXECUTE) ---
   "populate_geometry_columns", // ALTER TABLE ... ALTER COLUMN (silently blocked by READ ONLY)
-  "addgeometrycolumn",         // ALTER TABLE ... ADD COLUMN
-  "dropgeometrycolumn",        // ALTER TABLE ... DROP COLUMN
-  "dropgeometrytable",         // DROP TABLE IF EXISTS
-  "updategeometrysrid",        // ALTER TABLE ... DROP CONSTRAINT + UPDATE
+  "addgeometrycolumn", // ALTER TABLE ... ADD COLUMN
+  "dropgeometrycolumn", // ALTER TABLE ... DROP COLUMN
+  "dropgeometrytable", // DROP TABLE IF EXISTS
+  "updategeometrysrid", // ALTER TABLE ... DROP CONSTRAINT + UPDATE
   "postgis_extensions_upgrade", // CREATE/ALTER EXTENSION
 ]);
 
