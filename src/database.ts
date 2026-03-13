@@ -132,7 +132,7 @@ export async function createDatabasePool(
     password: env.DB_PASSWORD,
     max: 5,
     connectionTimeoutMillis: 10000,
-    ssl: env.DB_ENABLE_SSL,
+    ssl: env.DB_SSL,
   });
   db.on("error", (err) => {
     console.error("Database error:", err);

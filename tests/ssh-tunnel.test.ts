@@ -22,7 +22,7 @@ const baseEnv: Env = {
   DB_USER: "u",
   DB_PASSWORD: "p",
   DB_READ_ONLY: true,
-  DB_ENABLE_SSL: false,
+  DB_SSL: false,
   SSH_STRICT_HOST_KEY_CHECKING: true,
 };
 

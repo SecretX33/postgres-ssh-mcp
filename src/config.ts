@@ -19,7 +19,7 @@ export const EnvSchema = z
     DB_USER: NonEmptyString,
     DB_PASSWORD: NonEmptyString,
     DB_READ_ONLY: BooleanType.default(true),
-    DB_ENABLE_SSL: BooleanType.default(false),
+    DB_SSL: BooleanType.default(false),
     // Mode 1: SSH config file alias
     SSH_HOST: NonEmptyOptionalString,
     // Mode 2: explicit SSH connection
