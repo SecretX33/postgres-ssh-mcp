@@ -60,11 +60,6 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 22
-
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
