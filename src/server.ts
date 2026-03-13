@@ -16,10 +16,11 @@ import {
 } from "./database.js";
 
 export function buildServer(pool: Pool, readOnly: boolean): McpServer {
-  const server = new McpServer({
+  const serverInfo = {
     name: PROJECT_INFO.name,
     version: PROJECT_INFO.version,
-  });
+  };
+  const server = new McpServer(serverInfo);
 
   server.registerTool(
     "run_query",
@@ -70,6 +71,8 @@ async function main() {
   if (process.env.NODE_ENV && process.env.NODE_ENV !== "production") {
     dotenv.config();
   }
+  console.error(`Starting Postgres SSH MCP server version ${PROJECT_INFO.version}...`);
+
   const env = loadEnvOrExit();
   const sshConfig = resolveSshConfig(env);
 
@@ -80,7 +83,7 @@ async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
-  console.error("Postgres SSH MCP server ready");
+  console.error(`Postgres SSH MCP server version ${PROJECT_INFO.version} ready`);
 
   const cleanup = async () => {
     console.error("Shutting down...");
