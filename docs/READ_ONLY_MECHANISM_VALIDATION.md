@@ -341,6 +341,156 @@ verify both denylist coverage and that bypass techniques are caught.
 
 ---
 
+### Category 21 — EXPLAIN ANALYZE Integer/Boolean Arg Bypass
+
+**Root cause:** The `hasAnalyze` check in `sql-validator.ts` read only `elem.arg?.String?.sval`.
+`pgsql-parser` represents `ANALYZE 1` as an `Integer` AST node, not a `String` node — so
+`sval` was `undefined`, `val === "true"` was false, and `hasAnalyze` returned `false`.
+The validator passed the query and EXPLAIN executed the inner SELECT.
+
+**Status: FIXED** — `hasAnalyze` now also checks `Integer.ival !== 0` and `Boolean.boolval === true`,
+and falls back to blocking on any unrecognized arg node type.
+
+| # | SQL | Actual Result | Fixed Result |
+|---|-----|---------------|-------------|
+| 21a | `EXPLAIN (ANALYZE 1) SELECT 1` | **EXECUTED** — `actual time=...` returned | BLOCKED |
+| 21b | `EXPLAIN (ANALYZE 0) SELECT 1` | ALLOWED — no execution (0 = false) | ALLOWED |
+| 21c | `EXPLAIN (ANALYZE true) SELECT 1` | BLOCKED (Layer 1) ✓ | BLOCKED |
+| 21d | `EXPLAIN (ANALYZE on) SELECT 1` | BLOCKED (Layer 1) ✓ | BLOCKED |
+| 21e | `EXPLAIN (ANALYZE off) SELECT 1` | ALLOWED ✓ | ALLOWED |
+| 21f | `EXPLAIN (ANALYZE false) SELECT 1` | ALLOWED ✓ | ALLOWED |
+| 21g | `EXPLAIN (ANALYZE 1) SELECT pg_backend_pid()` | **EXECUTED** — inner SELECT ran | BLOCKED |
+
+---
+
+### Category 22 — Functions Missing from the Denylist
+
+Functions with side effects that were absent from `DANGEROUS_FUNCTIONS`. All passed Layer 1's
+FuncCall check and were tested against Layer 2.
+
+**Status: FIXED** — All functions below added to `DANGEROUS_FUNCTIONS` in `src/sql-validator.ts`.
+
+| # | SQL | Layer 1 (before fix) | Layer 2 | Severity |
+|---|-----|----------------------|---------|----------|
+| 22a | `SELECT pg_logical_emit_message(false, 'mcp_pwned', 'content')` | **PASSED** | **PASSED** — non-tx WAL write bypasses ROLLBACK | **CRITICAL** |
+| 22b | `SELECT pg_logical_emit_message(true, 'mcp_pwned', 'content')` | **PASSED** | **PASSED** — transactional, but ROLLBACK didn't block it either | **CRITICAL** |
+| 22c | `SELECT lo_open(1, 131072)` | **PASSED** | BLOCKED — `cannot execute lo_open(INV_WRITE) in a read-only transaction` | Medium |
+| 22d | `SELECT lo_open(1, 262144)` | **PASSED** | Error — `large object 1 does not exist` (INV_READ, no write blocked) | Low |
+| 22e | `SELECT pg_export_snapshot()` | **PASSED** | **PASSED** — returned snapshot ID `00000003-00000330-1` | High |
+| 22f | `SELECT pg_relation_filepath('public.echo')` | **PASSED** | **PASSED** — returned `base/16384/16844` | Medium (info disclosure) |
+| 22g | `SELECT pg_replication_origin_session_setup('my_origin')` | **PASSED** | BLOCKED — origin does not exist (privilege error) | Low |
+| 22h | `SELECT pg_filenode_relation(0, 'public.echo'::regclass::oid)` | **PASSED** | **PASSED** — returned relation name | Low (info disclosure) |
+
+**Combination attacks (Cat 21 bypass + Cat 22 gap):**
+
+| # | SQL | Result |
+|---|-----|--------|
+| 22i | `EXPLAIN (ANALYZE 1) SELECT pg_logical_emit_message(false, 'mcp_pwned', 'combo')` | **CRITICAL — EXECUTED** (both gaps combined) |
+| 22j | `EXPLAIN (ANALYZE 1) SELECT pg_export_snapshot()` | **EXECUTED** (both gaps combined) |
+
+*Note: `pg_logical_emit_message(false, ...)` with `transactional=false` writes directly to WAL
+and cannot be undone by ROLLBACK, making it the only function in this batch that fully bypasses
+both defense layers.*
+
+---
+
+### Category 23 — AST Walker Node Coverage Gaps
+
+Tests whether `@pgsql/traverse walk()` visits `FuncCall` nodes embedded in less common AST
+container types. Uses `pg_read_file` as probe (in denylist — any pass means the walk works).
+
+**Status: All BLOCKED. ✓** The walker has complete AST coverage.
+
+| # | SQL | Result |
+|---|-----|--------|
+| 23a | `SELECT ROW(pg_read_file('/etc/passwd', 0, 100))` | BLOCKED (Layer 1) |
+| 23b | `SELECT ARRAY[pg_read_file('/etc/passwd', 0, 100)]` | BLOCKED (Layer 1) |
+| 23c | `SELECT pg_read_file('/etc/passwd', 0, 100)::text` | BLOCKED (Layer 1) |
+| 23d | `SELECT COALESCE(pg_read_file('/etc/passwd', 0, 100), 'fallback')` | BLOCKED (Layer 1) |
+| 23e | `SELECT NULLIF(pg_read_file('/etc/passwd', 0, 100), '')` | BLOCKED (Layer 1) |
+| 23f | `SELECT GREATEST(pg_read_file('/etc/passwd', 0, 100), '')` | BLOCKED (Layer 1) |
+| 23g | `SELECT CASE WHEN 1=1 THEN pg_read_file('/etc/passwd', 0, 100) ELSE '' END` | BLOCKED (Layer 1) |
+| 23h | `SELECT 1 WHERE pg_read_file('/etc/passwd', 0, 100) IS NOT NULL` | BLOCKED (Layer 1) |
+| 23i | `SELECT 1 ORDER BY pg_read_file('/etc/passwd', 0, 100)` | BLOCKED (Layer 1) |
+| 23j | `SELECT 1 GROUP BY pg_read_file('/etc/passwd', 0, 100)` | BLOCKED (Layer 1) |
+| 23k | `SELECT * FROM (VALUES (pg_read_file('/etc/passwd', 0, 100))) AS v(c)` | BLOCKED (Layer 1) |
+| 23l | `SELECT pg_read_file('/etc/passwd', 0, 100) UNION SELECT 'safe'` | BLOCKED (Layer 1) |
+| 23m | `SELECT * FROM LATERAL (SELECT pg_read_file('/etc/passwd', 0, 100)) AS sub(v)` | BLOCKED (Layer 1) |
+| 23n | `SELECT (SELECT pg_read_file('/etc/passwd', 0, 100))` | BLOCKED (Layer 1) |
+
+---
+
+### Category 24 — FOR UPDATE / FOR SHARE in Nested Selects
+
+`SelectStmt.lockingClause` is checked inside `deepWalkCheck`. The walk recurses into all
+`SelectStmt` nodes, including those inside subqueries and scalar subqueries.
+
+**Status: All BLOCKED. ✓**
+
+| # | SQL | Result |
+|---|-----|--------|
+| 24a | `SELECT id FROM public.echo FOR UPDATE` | BLOCKED (Layer 1: FORBIDDEN_LOCKING) |
+| 24b | `SELECT id FROM public.echo FOR SHARE` | BLOCKED (Layer 1: FORBIDDEN_LOCKING) |
+| 24c | `SELECT * FROM (SELECT id FROM public.echo FOR UPDATE) AS sub` | BLOCKED (Layer 1: FORBIDDEN_LOCKING) |
+| 24d | `SELECT (SELECT id FROM public.echo FOR UPDATE LIMIT 1)` | BLOCKED (Layer 1: FORBIDDEN_LOCKING) |
+| 24e | `SELECT id FROM public.echo FOR UPDATE SKIP LOCKED` | BLOCKED (Layer 1: FORBIDDEN_LOCKING) |
+| 24f | `SELECT id FROM public.echo FOR UPDATE NOWAIT` | BLOCKED (Layer 1: FORBIDDEN_LOCKING) |
+
+---
+
+### Category 25 — FuncCall Name Matching Edge Cases
+
+Tests alternative naming and quoting that might bypass the `funcname` last-segment extraction
+and `.toLowerCase()` comparison.
+
+**Status: All handled correctly. ✓**
+
+| # | SQL | Result |
+|---|-----|--------|
+| 25a | `SELECT pg_read_file(filename => '/etc/passwd', offset => 0, length => 100)` | BLOCKED — parse error (`offset` is reserved keyword) |
+| 25b | `SELECT "pg_read_file"('/etc/passwd', 0, 100)` | BLOCKED (Layer 1) — double-quoted lowercase preserved as `pg_read_file` |
+| 25c | `SELECT "PG_READ_FILE"('/etc/passwd', 0, 100)` | BLOCKED (Layer 1) — `.toLowerCase()` maps to denylist entry |
+| 25d | `SELECT pg_catalog.pg_read_file('/etc/passwd', 0, 100)` | BLOCKED (Layer 1) — schema prefix stripped, last segment checked |
+| 25e | `SELECT information_schema._pg_truetypid(NULL::pg_attribute, NULL::pg_type)` | ALLOWED ✓ — internal catalog fn not in denylist |
+| 25f | `SELECT pg_read_file(E'/etc/passwd', 0, 100)` | BLOCKED (Layer 1) — E-string is a string literal arg, FuncCall node unchanged |
+| 25g | `SELECT pg_read_file($$/etc/passwd$$, 0, 100)` | BLOCKED (Layer 1) — dollar-quoted arg, FuncCall node unchanged |
+
+---
+
+### Category 26 — Re-verification of Round 1 Vulnerabilities
+
+All of the following succeeded in Round 1 (before the refactor). Verified that they are now
+caught by **Layer 1**, not Layer 2. Error messages read `"Function 'X' is not allowed in
+read-only mode"` — confirming the AST validator intercepts them before DB contact.
+
+| # | SQL | Round 1 Result | Round 2 Result |
+|---|-----|----------------|----------------|
+| 26a | `SELECT pg_advisory_lock(99999)` | SUCCEEDED | BLOCKED — Layer 1 ✓ |
+| 26b | `SELECT pg_try_advisory_lock(99998)` | SUCCEEDED | BLOCKED — Layer 1 ✓ |
+| 26c | `SELECT pg_read_file('/etc/passwd', 0, 200)` | SUCCEEDED | BLOCKED — Layer 1 ✓ |
+| 26d | `SELECT pg_read_file('pg_hba.conf', 0, 500)` | SUCCEEDED | BLOCKED — Layer 1 ✓ |
+| 26e | `SELECT pg_reload_conf()` | SUCCEEDED | BLOCKED — Layer 1 ✓ |
+| 26f | `SELECT pg_ls_dir('.')` | SUCCEEDED | BLOCKED — Layer 1 ✓ |
+| 26g | `SELECT pg_notify('test_channel', 'pwned')` | SUCCEEDED | BLOCKED — Layer 1 ✓ |
+| 26h | `SELECT pg_cancel_backend(pg_backend_pid())` | SUCCEEDED | BLOCKED — Layer 1 ✓ |
+
+---
+
+### Category 27 — New Statement Types / PG17 Edge Cases
+
+| # | SQL | Result |
+|---|-----|--------|
+| 27a | `TABLE public.echo` | ALLOWED — shorthand for `SELECT * FROM`, parsed as `SelectStmt` |
+| 27b | `VALUES (1, 2), (3, 4)` | ALLOWED — standalone VALUES, parsed as `SelectStmt` with `valuesLists` |
+| 27c | `SELECT 1 INTERSECT SELECT 2` | ALLOWED — set operation |
+| 27d | `SELECT 1 EXCEPT SELECT 2` | ALLOWED — set operation |
+| 27e | `CALL some_procedure()` | BLOCKED — `CallStmt` not in `ALLOWED_STATEMENT_TYPES` |
+| 27f | `EXPLAIN (GENERIC_PLAN) SELECT $1` | ALLOWED — no execution, no ANALYZE |
+| 27g | `EXPLAIN (MEMORY) SELECT 1` | DB error — `unrecognized EXPLAIN option "memory"` (PG version does not support it; not a security concern) |
+| 27h | `EXPLAIN (ANALYZE false, MEMORY true) SELECT 1` | DB error — same as 27g; `ANALYZE false` was correctly passed by validator |
+
+---
+
 ## Execution Plan (5 Parallel Agent Groups)
 
 Each agent receives a specific set of attack categories and runs them against the MCP server, recording: query sent, response received, whether mutation succeeded, and any error messages.
@@ -390,6 +540,12 @@ SELECT schema_name FROM information_schema.schemata WHERE schema_name IN ('evil_
 SELECT * FROM pg_locks WHERE locktype = 'advisory';
 ```
 
+**Round 2 post-session verification results (2026-03-12):**
+- `SELECT id, message FROM public.echo ORDER BY id DESC LIMIT 5` → max id = 100 ✓ (unchanged)
+- `SELECT locktype, objid FROM pg_locks WHERE locktype = 'advisory' AND pid = pg_backend_pid()` → no rows ✓
+- Evil/pwned table check → no rows ✓
+- `SELECT last_value FROM public.echo_id_seq` → 100 ✓ (unchanged)
+
 ---
 
 ## Expected Findings Summary
@@ -408,29 +564,54 @@ SELECT * FROM pg_locks WHERE locktype = 'advisory';
 | `pg_read_file()` | **Blocked (FORBIDDEN_FUNCTION)** | Blocked (privilege) |
 | `lo_creat()` | **Blocked (FORBIDDEN_FUNCTION)** | Blocked (READ ONLY) |
 | `dblink` out-of-band mutation | **Blocked (FORBIDDEN_FUNCTION)** | Not blocked (separate connection) |
-| `EXPLAIN ANALYZE` | **Blocked (FORBIDDEN_EXPLAIN_ANALYZE)** | Would execute inner query |
+| `EXPLAIN ANALYZE` (string args) | **Blocked (FORBIDDEN_EXPLAIN_ANALYZE)** | Would execute inner query |
+| `EXPLAIN (ANALYZE 1)` integer arg | ~~**VULNERABLE** (Round 2 Cat 21)~~ → **Fixed** | Would execute inner query |
 | `MERGE` in writeable CTE | **Blocked (FORBIDDEN_NESTED_MUTATION)** | Blocked (READ ONLY) |
 | Schema-qualified dangerous fn | **Blocked (FORBIDDEN_FUNCTION, schema stripped)** | Blocked (privilege/READ ONLY) |
+| FuncCall in any AST container | **Blocked (FORBIDDEN_FUNCTION)** — walk() has full coverage | N/A |
+| FOR UPDATE in nested subquery | **Blocked (FORBIDDEN_LOCKING)** — walk() visits all SelectStmt | N/A |
+| `pg_logical_emit_message(false,...)` | ~~**VULNERABLE** (Round 2 Cat 22)~~ → **Fixed** | **NOT BLOCKED** — non-tx WAL write bypasses ROLLBACK |
+| `pg_export_snapshot()` | ~~**VULNERABLE** (Round 2 Cat 22)~~ → **Fixed** | Allowed in READ ONLY tx |
+| `pg_relation_filepath()` | ~~**VULNERABLE** (Round 2 Cat 22)~~ → **Fixed** | Allowed — info disclosure |
+| `lo_open(INV_WRITE)` | ~~**VULNERABLE** (Round 2 Cat 22)~~ → **Fixed** | Blocked (READ ONLY) |
 | UDF wrapping dangerous fn | **NOT BLOCKED — known gap** | Blocked only if non-superuser role |
 
 ---
 
 ## Implementation Status
 
-The following mitigations are **implemented and active**:
-
 1. **Multi-statement blocking** (Layer 1): The AST validator always enforces single-statement
    SQL. This neutralizes all COMMIT-bypass, ROLLBACK-escape, and chained-DDL attacks.
 2. **Statement allowlist** (Layer 1, readOnly mode): Only `SELECT` and `EXPLAIN SELECT`
    are permitted.
-3. **Function denylist** (Layer 1): ~60 dangerous built-in functions across 10 risk categories
-   are blocked by name at the AST level, including schema-qualified variants.
+3. **Function denylist** (Layer 1): Dangerous built-in functions blocked by name at the AST
+   level, including schema-qualified variants (schema prefix stripped, last segment checked).
 4. **EXPLAIN ANALYZE block** (Layer 1): Prevents using EXPLAIN to execute functions.
-5. **MERGE in CTE block** (Layer 1): MergeStmt nodes inside CTEs are rejected.
+5. **MERGE in CTE block** (Layer 1): `MergeStmt` nodes inside CTEs are rejected.
 6. **READ ONLY transaction + ROLLBACK** (Layer 2): Catches DML not caught by Layer 1.
 
-**Remaining known gap:**
+7. **EXPLAIN ANALYZE integer/boolean arg** (Layer 1): `hasAnalyze` now checks all three
+   AST node types for the `ANALYZE` option arg: `String.sval` (`"true"`, `"on"`),
+   `Integer.ival` (non-zero), `Boolean.boolval` (`true`). Unknown node types are blocked
+   conservatively.
+
+8. **Expanded function denylist** (Layer 1): Added 8 previously missing functions:
+   - `pg_logical_emit_message` — non-transactional WAL writes bypass ROLLBACK entirely
+   - `lo_open` — INV_WRITE mode (131072) writes to a large object
+   - `pg_export_snapshot` — creates an exportable snapshot (persistent side-effect)
+   - `pg_relation_filepath` — discloses the on-disk path of any relation
+   - `pg_filenode_relation` — reverse-maps filenode OID to relation name (info disclosure)
+   - `pg_replication_origin_session_setup` — sets persistent session-level replication origin
+   - `pg_replication_origin_xact_setup` — sets transaction-level replication origin
+   - `pg_replication_origin_session_reset` / `pg_replication_origin_xact_reset` — resets same
+
+### Remaining known gaps
+
 - **User-defined functions (UDFs)**: `SELECT my_evil_wrapper()` cannot be caught by the
   AST validator — function bodies are opaque at parse time. Mitigation: run the database
   user with only `SELECT` privileges (non-superuser role). This is the recommended
   defense-in-depth configuration.
+- **`pg_logical_emit_message(false, ...)` note**: Even with the denylist fix in place, this
+  function is uniquely dangerous because its non-transactional WAL write mode (`transactional=false`)
+  is the only known vector that bypasses Layer 2 entirely. The Layer 1 fix is therefore
+  load-bearing for this specific function.
