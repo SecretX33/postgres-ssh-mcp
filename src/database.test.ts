@@ -264,6 +264,7 @@ describe("createDatabasePool", () => {
     DB_USER: "user",
     DB_PASSWORD: "pass",
     DB_READ_ONLY: true,
+    DB_ENABLE_SSL: false,
     SSH_STRICT_HOST_KEY_CHECKING: true,
   };
 
