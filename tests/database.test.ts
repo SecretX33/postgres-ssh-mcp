@@ -6,8 +6,8 @@ import {
   runListTables,
   runDescribeTable,
   createDatabasePool,
-} from "./database.js";
-import type { Env } from "./config.js";
+} from "../src/database.js";
+import type { Env } from "../src/config.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -97,7 +97,7 @@ describe("runQuery", () => {
   });
 
   it("ROLLBACK failure is silently caught and does not surface to caller", async () => {
-    const { pool, client } = makePool((sql) => {
+    const { pool } = makePool((sql) => {
       if (sql === "BEGIN TRANSACTION READ ONLY") return Promise.resolve(makeResult([]));
       if (sql === "ROLLBACK") return Promise.reject(new Error("rollback failed"));
       return Promise.resolve(makeResult([]));
@@ -229,16 +229,16 @@ describe("runDescribeTable", () => {
 // ---------------------------------------------------------------------------
 
 describe("runQuery – validation integration", () => {
-  it("returns isError response for DELETE statement", async () => {
+  it("returns isError response for DELETE statement when readOnly=true", async () => {
     const { pool } = makePool(() => Promise.resolve(makeResult([])));
-    const result = await runQuery(pool, "DELETE FROM t", false);
+    const result = await runQuery(pool, "DELETE FROM t", true);
     expect(result.isError).toBe(true);
     expect((result.content[0] as { text: string }).text).toMatch(/DELETE/i);
   });
 
-  it("returns isError response for multi-statement input", async () => {
+  it("returns isError response for multi-statement input when readOnly=true", async () => {
     const { pool } = makePool(() => Promise.resolve(makeResult([])));
-    const result = await runQuery(pool, "SELECT 1; DROP TABLE t", false);
+    const result = await runQuery(pool, "SELECT 1; DROP TABLE t", true);
     expect(result.isError).toBe(true);
   });
 

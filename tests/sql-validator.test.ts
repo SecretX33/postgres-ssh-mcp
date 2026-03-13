@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateReadOnlyQuery, ValidationError } from "./sql-validator.js";
+import { validateReadOnlyQuery, ValidationError } from "../src/sql-validator.js";
 
 describe("ValidationError", () => {
   it("is an instance of Error with a code property", () => {
