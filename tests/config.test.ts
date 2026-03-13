@@ -4,7 +4,7 @@ import {
   parseSshConfigFile,
   resolveSshConfig,
   loadEnvOrExit,
-} from "./config.js";
+} from "../src/config.js";
 import * as os from "os";
 import * as path from "path";
 import * as fs from "fs";

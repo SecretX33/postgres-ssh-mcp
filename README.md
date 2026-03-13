@@ -66,32 +66,40 @@ claude mcp add --transport stdio postgres-ssh-mcp \
 
 ## Tools
 
-| Tool             | Description                                                           |
-|------------------|-----------------------------------------------------------------------|
-| `run_query`      | Execute a SQL query (read-only by default; see `DB_READ_ONLY`)        |
-| `list_schemas`   | List all schemas in the database                                      |
-| `list_tables`    | List tables in a schema (default: `public`)                           |
-| `describe_table` | Show columns, types, and nullability for a table                      |
+| Tool             | Description                                                    |
+|------------------|----------------------------------------------------------------|
+| `run_query`      | Execute a SQL query (read-only by default; see `DB_READ_ONLY`) |
+| `list_schemas`   | List all schemas in the database                               |
+| `list_tables`    | List tables in a schema (default: `public`)                    |
+| `describe_table` | Show columns, types, and nullability for a table               |
 
 ## Environment Variables
 
-These are all environment variables that can be used to configure this MCP server. 
+These are all environment variables that can be used to configure this MCP server.
 
-| Variable                       | Required | Default | Description                                              |
-|--------------------------------|----------|---------|----------------------------------------------------------|
-| `DB_HOST`                      | Yes      | —       | Postgres host or RDS endpoint                            |
-| `DB_PORT`                      | No       | `5432`  | Postgres port                                            |
-| `DB_NAME`                      | Yes      | —       | Database name                                            |
-| `DB_USER`                      | Yes      | —       | Database user                                            |
-| `DB_PASSWORD`                  | Yes      | —       | Database password                                        |
-| `DB_READ_ONLY`                 | No       | `true`  | Set to `false` to allow write queries (`run_query` only) |
-| `SSH_HOST`                     | No       | —       | SSH config alias (reads `~/.ssh/config`)                 |
-| `SSH_HOSTNAME`                 | No       | —       | Bastion hostname or IP                                   |
-| `SSH_USER`                     | No       | —       | SSH login user                                           |
-| `SSH_PORT`                     | No       | `22`    | SSH port                                                 |
-| `SSH_STRICT_HOST_KEY_CHECKING` | No       | `true`  | Enables or disables strict host checking                 |
-| `SSH_IDENTITY_FILE`            | No       | —       | Absolute path or `~/...` to private key file             |
-| `SSH_KEY_PASSPHRASE`           | No       | —       | Passphrase for an encrypted private key                  |
+### Required
+
+| Variable      | Description                   |
+|---------------|-------------------------------|
+| `DB_HOST`     | Postgres host or RDS endpoint |
+| `DB_NAME`     | Database name                 |
+| `DB_USER`     | Database user                 |
+| `DB_PASSWORD` | Database password             |
+
+### Optional
+
+| Variable                       | Default | Description                                              |
+|--------------------------------|---------|----------------------------------------------------------|
+| `DB_PORT`                      | `5432`  | Postgres port                                            |
+| `DB_READ_ONLY`                 | `true`  | Set to `false` to allow write queries (`run_query` only) |
+| `DB_SSL`                       | `false` | Enable TLS for the database connection                   |
+| `SSH_HOST`                     | —       | SSH config alias (reads `~/.ssh/config`)                 |
+| `SSH_HOSTNAME`                 | —       | Bastion hostname or IP                                   |
+| `SSH_USER`                     | —       | SSH login user                                           |
+| `SSH_PORT`                     | `22`    | SSH port                                                 |
+| `SSH_STRICT_HOST_KEY_CHECKING` | `true`  | Enables or disables strict host checking                 |
+| `SSH_IDENTITY_FILE`            | —       | Absolute path or `~/...` to private key file             |
+| `SSH_KEY_PASSPHRASE`           | —       | Passphrase for an encrypted private key                  |
 
 ## Development
 
@@ -120,4 +128,5 @@ npm run dev
 ```
 
 ## License
+
 MIT

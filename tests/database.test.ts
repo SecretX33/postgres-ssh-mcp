@@ -6,8 +6,8 @@ import {
   runListTables,
   runDescribeTable,
   createDatabasePool,
-} from "./database.js";
-import type { Env } from "./config.js";
+} from "../src/database.js";
+import type { Env } from "../src/config.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -97,7 +97,7 @@ describe("runQuery", () => {
   });
 
   it("ROLLBACK failure is silently caught and does not surface to caller", async () => {
-    const { pool, client } = makePool((sql) => {
+    const { pool } = makePool((sql) => {
       if (sql === "BEGIN TRANSACTION READ ONLY") return Promise.resolve(makeResult([]));
       if (sql === "ROLLBACK") return Promise.reject(new Error("rollback failed"));
       return Promise.resolve(makeResult([]));
@@ -224,6 +224,31 @@ describe("runDescribeTable", () => {
 // createDatabasePool
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// runQuery – validation integration
+// ---------------------------------------------------------------------------
+
+describe("runQuery – validation integration", () => {
+  it("returns isError response for DELETE statement when readOnly=true", async () => {
+    const { pool } = makePool(() => Promise.resolve(makeResult([])));
+    const result = await runQuery(pool, "DELETE FROM t", true);
+    expect(result.isError).toBe(true);
+    expect((result.content[0] as { text: string }).text).toMatch(/DELETE/i);
+  });
+
+  it("returns isError response for multi-statement input when readOnly=true", async () => {
+    const { pool } = makePool(() => Promise.resolve(makeResult([])));
+    const result = await runQuery(pool, "SELECT 1; DROP TABLE t", true);
+    expect(result.isError).toBe(true);
+  });
+
+  it("passes a valid SELECT through to the pool", async () => {
+    const { pool } = makePool(() => Promise.resolve(makeResult([{ id: 1 }])));
+    const result = await runQuery(pool, "SELECT 1", false);
+    expect(result.isError).toBeUndefined();
+  });
+});
+
 vi.mock("pg", () => {
   const Pool = vi.fn();
   Pool.prototype.on = vi.fn();
@@ -239,6 +264,7 @@ describe("createDatabasePool", () => {
     DB_USER: "user",
     DB_PASSWORD: "pass",
     DB_READ_ONLY: true,
+    DB_SSL: false,
     SSH_STRICT_HOST_KEY_CHECKING: true,
   };
 

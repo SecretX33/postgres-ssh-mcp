@@ -1,7 +1,7 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 
 vi.mock("dotenv", () => ({ default: { config: vi.fn() } }));
-vi.mock("./config.js", () => ({
+vi.mock("../src/config.js", () => ({
   loadEnvOrExit: vi.fn(() => ({
     DB_HOST: "localhost",
     DB_PORT: 5432,
@@ -13,15 +13,15 @@ vi.mock("./config.js", () => ({
   })),
   resolveSshConfig: vi.fn(() => null),
 }));
-vi.mock("./ssh-tunnel.js", () => ({ buildSshTunnel: vi.fn(async () => null) }));
-vi.mock("./database.js", () => ({
+vi.mock("../src/ssh-tunnel.js", () => ({ buildSshTunnel: vi.fn(async () => null) }));
+vi.mock("../src/database.js", () => ({
   createDatabasePool: vi.fn(async () => ({})),
   runQuery: vi.fn(async () => ({ content: [{ type: "text", text: "ok" }] })),
   runSchemaQuery: vi.fn(async () => ({ content: [{ type: "text", text: "[]" }] })),
   runListTables: vi.fn(async () => ({ content: [{ type: "text", text: "[]" }] })),
   runDescribeTable: vi.fn(async () => ({ content: [{ type: "text", text: "[]" }] })),
 }));
-vi.mock("./util.js", () => ({ PROJECT_INFO: { name: "test", version: "0.0.0" } }));
+vi.mock("../src/util.js", () => ({ PROJECT_INFO: { name: "test", version: "0.0.0" } }));
 vi.mock("@modelcontextprotocol/sdk/server/stdio.js", () => ({
   StdioServerTransport: vi.fn(function (this: any) {
     this.start = () => Promise.resolve();
@@ -29,9 +29,14 @@ vi.mock("@modelcontextprotocol/sdk/server/stdio.js", () => ({
 }));
 vi.mock("pg", () => ({ Pool: vi.fn(() => ({ on: vi.fn(), end: vi.fn() })) }));
 
-import { buildServer } from "./server.js";
+import { buildServer } from "../src/server.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { runQuery, runSchemaQuery, runListTables, runDescribeTable } from "./database.js";
+import {
+  runQuery,
+  runSchemaQuery,
+  runListTables,
+  runDescribeTable,
+} from "../src/database.js";
 import type { Pool } from "pg";
 
 const mockPool = {} as Pool;
@@ -46,7 +51,7 @@ afterEach(() => {
 });
 
 function getTool(name: string) {
-  const call = registerToolSpy.mock.calls.find((c) => c[0] === name);
+  const call = registerToolSpy.mock.calls.find((c: any) => c[0] === name);
   if (!call) throw new Error(`Tool "${name}" not registered`);
   return { config: call[1] as { description: string }, handler: call[2] as Function };
 }
@@ -59,7 +64,7 @@ describe("buildServer", () => {
 
   it("registers tools with correct names in order", () => {
     buildServer(mockPool, true);
-    const names = registerToolSpy.mock.calls.map((c) => c[0]);
+    const names = registerToolSpy.mock.calls.map((c: any) => c[0]);
     expect(names).toEqual(["run_query", "list_schemas", "list_tables", "describe_table"]);
   });
 

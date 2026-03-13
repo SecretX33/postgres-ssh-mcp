@@ -3,11 +3,11 @@ import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 vi.mock("tunnel-ssh", () => ({ createTunnel: vi.fn() }));
 vi.mock("node:fs", () => ({ existsSync: vi.fn(), readFileSync: vi.fn() }));
 
-import { buildSshTunnel } from "./ssh-tunnel.js";
+import { buildSshTunnel } from "../src/ssh-tunnel.js";
 import { createTunnel } from "tunnel-ssh";
 import * as fs from "node:fs";
-import type { Env } from "./config.js";
-import type { SshHostConfig } from "./config.js";
+import type { Env } from "../src/config.js";
+import type { SshHostConfig } from "../src/config.js";
 
 function makeMocks(port = 54321) {
   const mockServer = { address: vi.fn(() => ({ port })), close: vi.fn() };
@@ -22,6 +22,7 @@ const baseEnv: Env = {
   DB_USER: "u",
   DB_PASSWORD: "p",
   DB_READ_ONLY: true,
+  DB_SSL: false,
   SSH_STRICT_HOST_KEY_CHECKING: true,
 };
 
@@ -60,7 +61,7 @@ describe("buildSshTunnel", () => {
   it("throws when identity file does not exist", async () => {
     vi.mocked(fs.existsSync).mockReturnValue(false);
     const config: SshHostConfig = { ...baseSshConfig, identityFile: "/missing/key" };
-    await expect(buildSshTunnel(baseEnv, config)).rejects.toThrow(
+    expect(buildSshTunnel(baseEnv, config)).rejects.toThrow(
       /SSH identity file not found/,
     );
   });
@@ -174,11 +175,9 @@ describe("buildSshTunnel", () => {
     expect(errorCall).toBeDefined();
     const handler = errorCall![1] as Function;
 
-    const exitSpy = vi
-      .spyOn(process, "exit")
-      .mockImplementation((_code?: number): never => {
-        throw new Error("process.exit called");
-      });
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((): never => {
+      throw new Error("process.exit called");
+    });
     expect(() => handler(new Error("ssh broke"))).toThrow("process.exit called");
     expect(exitSpy).toHaveBeenCalledWith(1);
   });

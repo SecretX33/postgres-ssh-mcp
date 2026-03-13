@@ -3,9 +3,9 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 
-const booleanType = z.enum(["true", "false"]).transform((value) => value === "true");
-const nonEmptyString = z.string().min(1);
-const nonEmptyOptionalString = z.string().transform(convertEmptyToUndefined).optional();
+const BooleanType = z.enum(["true", "false"]).transform((value) => value === "true");
+const NonEmptyString = z.string().min(1);
+const NonEmptyOptionalString = z.string().transform(convertEmptyToUndefined).optional();
 
 function convertEmptyToUndefined<T>(value: T | null | undefined): T | undefined {
   return !value ? undefined : value;
@@ -13,21 +13,22 @@ function convertEmptyToUndefined<T>(value: T | null | undefined): T | undefined 
 
 export const EnvSchema = z
   .object({
-    DB_HOST: nonEmptyString,
+    DB_HOST: NonEmptyString,
     DB_PORT: z.coerce.number().int().min(1).max(65535).default(5432),
-    DB_NAME: nonEmptyString,
-    DB_USER: nonEmptyString,
-    DB_PASSWORD: nonEmptyString,
-    DB_READ_ONLY: booleanType.default(true),
+    DB_NAME: NonEmptyString,
+    DB_USER: NonEmptyString,
+    DB_PASSWORD: NonEmptyString,
+    DB_READ_ONLY: BooleanType.default(true),
+    DB_SSL: BooleanType.default(false),
     // Mode 1: SSH config file alias
-    SSH_HOST: nonEmptyOptionalString,
+    SSH_HOST: NonEmptyOptionalString,
     // Mode 2: explicit SSH connection
-    SSH_HOSTNAME: nonEmptyOptionalString,
-    SSH_USER: nonEmptyOptionalString,
+    SSH_HOSTNAME: NonEmptyOptionalString,
+    SSH_USER: NonEmptyOptionalString,
     SSH_PORT: z.coerce.number().int().min(1).max(65535).optional(),
-    SSH_STRICT_HOST_KEY_CHECKING: booleanType.default(true),
-    SSH_IDENTITY_FILE: nonEmptyOptionalString,
-    SSH_KEY_PASSPHRASE: nonEmptyOptionalString,
+    SSH_STRICT_HOST_KEY_CHECKING: BooleanType.default(true),
+    SSH_IDENTITY_FILE: NonEmptyOptionalString,
+    SSH_KEY_PASSPHRASE: NonEmptyOptionalString,
   })
   .superRefine((data, ctx) => {
     const hasHost = data.SSH_HOST !== undefined;
