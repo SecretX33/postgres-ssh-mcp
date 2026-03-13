@@ -6,8 +6,11 @@ trustPolicy: no-downgrade   # Blocks installation when a package version has wea
 blockExoticSubdeps: true    # Prevent installation of exotic subdependencies (e.g., git repositories, local paths, etc.). See: https://pnpm.io/blog/releases/10.26#blockexoticsubdeps
 
 ## Configure build script execution permission. Explicitly allows (true) or disallows (false) script execution per package
-#allowBuilds:
-#  esbuild: true           # Optimizes out the JavaScript shim by the actual native binary for faster builds (https://github.com/evanw/esbuild/issues/4085)
+allowBuilds:
+  esbuild: true           # Optimizes out the JavaScript shim by the actual native binary for faster builds (https://github.com/evanw/esbuild/issues/4085)
+  "@launchql/protobufjs": false
+  "cpu-features": false
+  "ssh2": false
 
 # When applying certain hotfixed packages, uncomment this and list them here to exempt them from the minimumReleaseAge control
 # minimumReleaseAgeExclude:
