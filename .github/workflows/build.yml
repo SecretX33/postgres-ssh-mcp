@@ -54,6 +54,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Check formatting
+        run: pnpm format
+
+      - name: Typecheck
+        run: pnpm typecheck
+
       - name: Sanitize provided version
         id: sanitize
         if: inputs.version != ''
