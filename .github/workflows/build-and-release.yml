@@ -1,4 +1,4 @@
-name: Release
+name: Build and Release
 
 on:
   workflow_dispatch:
@@ -38,7 +38,7 @@ permissions:
   contents: write
 
 jobs:
-  call-build:
+  build:
     if: github.repository == 'SecretX33/postgres-ssh-mcp'
     uses: ./.github/workflows/build.yml
     with:
@@ -46,7 +46,7 @@ jobs:
 
   release:
     if: github.repository == 'SecretX33/postgres-ssh-mcp'
-    needs: call-build
+    needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write

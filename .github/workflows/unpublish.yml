@@ -1,4 +1,4 @@
-name: Unpublish from NPM
+name: Unpublish
 
 on:
   workflow_dispatch:
