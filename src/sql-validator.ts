@@ -31,7 +31,7 @@ const ALLOWED_STATEMENT_TYPES = new Set(["SelectStmt", "ExplainStmt"]);
  * privileges (e.g. `pg_read_all_data`). The parser is the application-level
  * gate; the DB role is the enforcement layer.
  */
-export async function validateReadOnlyQuery(sql: string): Promise<void> {
+export async function validateQuery(sql: string, readOnly: boolean): Promise<void> {
   // Stage 2 pre-check — empty before parse
   if (sql.trim() === "") {
     throw new ValidationError("EMPTY_QUERY", "Query is empty");
@@ -59,6 +59,9 @@ export async function validateReadOnlyQuery(sql: string): Promise<void> {
   if (stmts.length > 1) {
     throw new ValidationError("MULTI_STATEMENT", "Only single statements are allowed");
   }
+
+  // If read-only mode is disabled, skip allowlist validation
+  if (!readOnly) return;
 
   // Stage 3 — allowlist
   const rawStmt = stmts[0];
