@@ -16,7 +16,6 @@ on:
     secrets:
       NPM_TOKEN:
         required: true
-
 permissions:
   contents: read
   id-token: write
@@ -58,7 +57,16 @@ jobs:
       - name: Download release asset
         run: gh release download "${{ steps.sanitize.outputs.tag }}" --pattern "*.tgz"
 
+      - name: List downloaded files
+        run: |
+          echo "=== Working directory ==="
+          pwd
+          echo "=== All files in current directory ==="
+          ls -la
+          echo "=== TGZ files ==="
+          ls -la *.tgz 2>/dev/null || echo "No .tgz files found!"
+
       - name: Publish to NPM
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: pnpm publish *.tgz --no-git-checks --access public --provenance
+        run: pnpm publish postgres-ssh-mcp-${{ steps.sanitize.outputs.version }}.tgz --access public --provenance

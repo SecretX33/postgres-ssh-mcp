@@ -91,7 +91,8 @@ jobs:
         run: |
           gh release create "$TAG" "$ARTIFACT" \
             --repo "${{ github.repository }}" \
-            --title "$TAG"
+            --title "$TAG" \
+            --generate-notes
 
       - name: Dry run notice
         if: inputs.dry_run == true
