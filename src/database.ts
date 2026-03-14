@@ -1,4 +1,5 @@
 import { Pool, type PoolClient, type QueryResult } from "pg";
+import * as fs from "node:fs";
 import type { TunnelInfo } from "./ssh-tunnel.js";
 import type { Env } from "./config.js";
 import type { ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -155,6 +156,18 @@ export async function createDatabasePool(
   env: Env,
   sshTunnel: TunnelInfo | null,
 ): Promise<Pool> {
+  let ssl: boolean | { ca?: string; rejectUnauthorized?: boolean } = false;
+  if (env.DB_SSL) {
+    const sslConfig: { ca?: string; rejectUnauthorized?: boolean } = {};
+    if (env.DB_SSL_CA) {
+      sslConfig.ca = fs.readFileSync(env.DB_SSL_CA, "utf-8");
+    }
+    if (!env.DB_SSL_REJECT_UNAUTHORIZED) {
+      sslConfig.rejectUnauthorized = false;
+    }
+    ssl = Object.keys(sslConfig).length > 0 ? sslConfig : true;
+  }
+
   const db = new Pool({
     host: sshTunnel ? "127.0.0.1" : env.DB_HOST,
     port: sshTunnel ? sshTunnel.localPort : env.DB_PORT,
@@ -164,7 +177,7 @@ export async function createDatabasePool(
     max: env.DB_CONNECTION_POOL_SIZE,
     connectionTimeoutMillis: env.DB_CONNECTION_TIMEOUT_MS,
     query_timeout: env.DB_QUERY_TIMEOUT_SECONDS,
-    ssl: env.DB_SSL,
+    ssl,
   });
   db.on("error", (err) => {
     console.error("Database error:", err);

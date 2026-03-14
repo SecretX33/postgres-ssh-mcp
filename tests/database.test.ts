@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { Pool, type QueryResult } from "pg";
+import * as fs from "node:fs";
 import {
   runQuery,
   runSchemaQuery,
@@ -345,6 +346,10 @@ vi.mock("pg", () => {
   return { Pool };
 });
 
+vi.mock("node:fs", () => ({
+  readFileSync: vi.fn(),
+}));
+
 describe("createDatabasePool", () => {
   const baseEnv: Env = {
     DB_HOST: "db.example.com",
@@ -358,6 +363,8 @@ describe("createDatabasePool", () => {
     DB_CONNECTION_TIMEOUT_MS: 10000,
     DB_QUERY_TIMEOUT_SECONDS: 15,
     DB_MAX_ROWS: 1000,
+    DB_SSL_CA: undefined,
+    DB_SSL_REJECT_UNAUTHORIZED: true,
     SSH_STRICT_HOST_KEY_CHECKING: true,
   };
 
@@ -415,5 +422,78 @@ describe("createDatabasePool", () => {
       "process.exit called",
     );
     expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+});
+
+describe("createDatabasePool – SSL CA", () => {
+  const baseEnv: Env = {
+    DB_HOST: "db.example.com",
+    DB_PORT: 5432,
+    DB_NAME: "mydb",
+    DB_USER: "user",
+    DB_PASSWORD: "pass",
+    DB_READ_ONLY: true,
+    DB_SSL: false,
+    DB_CONNECTION_POOL_SIZE: 5,
+    DB_CONNECTION_TIMEOUT_MS: 10000,
+    DB_QUERY_TIMEOUT_SECONDS: 15,
+    DB_MAX_ROWS: 1000,
+    DB_SSL_CA: undefined,
+    DB_SSL_REJECT_UNAUTHORIZED: true,
+    SSH_STRICT_HOST_KEY_CHECKING: true,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (Pool.prototype.query as ReturnType<typeof vi.fn>).mockResolvedValue(
+      makeResult([{ ok: 1 }]),
+    );
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("should pass ssl object with ca and rejectUnauthorized when DB_SSL_CA is set", async () => {
+    vi.mocked(fs.readFileSync).mockReturnValue("--- CA CERT ---");
+    const env = {
+      ...baseEnv,
+      DB_SSL: true,
+      DB_SSL_CA: "/path/to/ca.pem",
+      DB_SSL_REJECT_UNAUTHORIZED: true,
+    };
+    await createDatabasePool(env, null);
+    expect(Pool).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ssl: { ca: "--- CA CERT ---" },
+      }),
+    );
+  });
+
+  it("should pass rejectUnauthorized=false when configured", async () => {
+    const env = { ...baseEnv, DB_SSL: true, DB_SSL_REJECT_UNAUTHORIZED: false };
+    await createDatabasePool(env, null);
+    expect(Pool).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ssl: { rejectUnauthorized: false },
+      }),
+    );
+  });
+
+  it("should pass ssl=true when DB_SSL=true with no CA and rejectUnauthorized=true", async () => {
+    const env = { ...baseEnv, DB_SSL: true, DB_SSL_REJECT_UNAUTHORIZED: true };
+    await createDatabasePool(env, null);
+    expect(Pool).toHaveBeenCalledWith(expect.objectContaining({ ssl: true }));
+  });
+
+  it("should pass ssl: false when DB_SSL is false regardless of CA", async () => {
+    const env = {
+      ...baseEnv,
+      DB_SSL: false,
+      DB_SSL_CA: "/path/to/ca.pem",
+      DB_SSL_REJECT_UNAUTHORIZED: true,
+    };
+    await createDatabasePool(env, null);
+    expect(Pool).toHaveBeenCalledWith(expect.objectContaining({ ssl: false }));
   });
 });
