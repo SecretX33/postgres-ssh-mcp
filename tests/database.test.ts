@@ -368,6 +368,8 @@ describe("createDatabasePool", () => {
     SSH_STRICT_HOST_KEY_CHECKING: true,
     SSH_PASSWORD: undefined,
     SSH_KEEPALIVE_INTERVAL_MS: 10000,
+    SSH_TRUST_ON_FIRST_USE: true,
+    SSH_KNOWN_HOSTS_PATH: undefined,
   };
 
   beforeEach(() => {
@@ -445,6 +447,8 @@ describe("createDatabasePool – SSL CA", () => {
     SSH_STRICT_HOST_KEY_CHECKING: true,
     SSH_PASSWORD: undefined,
     SSH_KEEPALIVE_INTERVAL_MS: 10000,
+    SSH_TRUST_ON_FIRST_USE: true,
+    SSH_KNOWN_HOSTS_PATH: undefined,
   };
 
   beforeEach(() => {

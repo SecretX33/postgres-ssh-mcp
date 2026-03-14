@@ -37,6 +37,8 @@ export const EnvSchema = z
     SSH_KEY_PASSPHRASE: NonEmptyOptionalString,
     SSH_PASSWORD: NonEmptyOptionalString,
     SSH_KEEPALIVE_INTERVAL_MS: z.coerce.number().int().min(0).default(10000),
+    SSH_TRUST_ON_FIRST_USE: BooleanType.default(true),
+    SSH_KNOWN_HOSTS_PATH: NonEmptyOptionalString,
   })
   .superRefine((data, ctx) => {
     const hasHost = data.SSH_HOST !== undefined;
