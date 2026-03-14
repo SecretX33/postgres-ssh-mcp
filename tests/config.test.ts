@@ -549,14 +549,14 @@ describe("EnvSchema", () => {
     expect(result.SSH_PASSWORD).toBe("secret");
   });
 
-  it("should default SSH_KEEPALIVE_INTERVAL_MS to 10000", () => {
+  it("should default SSH_KEEPALIVE_INTERVAL_MS to 0 (disabled)", () => {
     const result = EnvSchema.parse({
       DB_HOST: "x",
       DB_NAME: "x",
       DB_USER: "x",
       DB_PASSWORD: "x",
     });
-    expect(result.SSH_KEEPALIVE_INTERVAL_MS).toBe(10000);
+    expect(result.SSH_KEEPALIVE_INTERVAL_MS).toBe(0);
   });
 
   it("should accept custom SSH_KEEPALIVE_INTERVAL_MS", () => {

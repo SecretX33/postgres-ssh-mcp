@@ -36,7 +36,7 @@ export const EnvSchema = z
     SSH_IDENTITY_FILE: NonEmptyOptionalString,
     SSH_KEY_PASSPHRASE: NonEmptyOptionalString,
     SSH_PASSWORD: NonEmptyOptionalString,
-    SSH_KEEPALIVE_INTERVAL_MS: z.coerce.number().int().min(0).default(10000),
+    SSH_KEEPALIVE_INTERVAL_MS: z.coerce.number().int().min(0).default(0),
     SSH_TRUST_ON_FIRST_USE: BooleanType.default(true),
     SSH_KNOWN_HOSTS_PATH: NonEmptyOptionalString,
     SSH_MAX_RECONNECT_ATTEMPTS: z.coerce.number().int().min(-1).default(5),
