@@ -35,8 +35,8 @@
     "start": "node dist/server.js",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "format": "prettier --check --cache src",
-    "format:write": "prettier --write --cache src"
+    "format": "prettier --check --cache src tests",
+    "format:write": "prettier --write --cache src tests"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.27.1",

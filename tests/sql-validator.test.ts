@@ -440,9 +440,9 @@ describe("validateQuery – expanded function denylist (readOnly=true)", () => {
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
   it("blocks pg_backup_stop", async () => {
-    await expect(
-      validateQuery("SELECT pg_backup_stop()", true),
-    ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
+    await expect(validateQuery("SELECT pg_backup_stop()", true)).rejects.toMatchObject({
+      code: "FORBIDDEN_FUNCTION",
+    });
   });
 
   // Settings / config disclosure
@@ -457,9 +457,9 @@ describe("validateQuery – expanded function denylist (readOnly=true)", () => {
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
   it("blocks pg_config", async () => {
-    await expect(
-      validateQuery("SELECT * FROM pg_config()", true),
-    ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
+    await expect(validateQuery("SELECT * FROM pg_config()", true)).rejects.toMatchObject({
+      code: "FORBIDDEN_FUNCTION",
+    });
   });
 
   // Replication origin
@@ -503,9 +503,9 @@ describe("validateQuery – expanded function denylist (readOnly=true)", () => {
 
   // system
   it("blocks system", async () => {
-    await expect(
-      validateQuery("SELECT system('ls')", true),
-    ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
+    await expect(validateQuery("SELECT system('ls')", true)).rejects.toMatchObject({
+      code: "FORBIDDEN_FUNCTION",
+    });
   });
 
   // Logical slot peek binary (missing from old list)
@@ -541,15 +541,18 @@ describe("validateQuery – expanded function denylist (readOnly=true)", () => {
 
   // pg_trgm session-level state mutation
   it("blocks set_limit", async () => {
-    await expect(
-      validateQuery("SELECT set_limit(0.1)", true),
-    ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
+    await expect(validateQuery("SELECT set_limit(0.1)", true)).rejects.toMatchObject({
+      code: "FORBIDDEN_FUNCTION",
+    });
   });
 
   // PostGIS admin functions (internal DDL/DML via EXECUTE)
   it("blocks addgeometrycolumn", async () => {
     await expect(
-      validateQuery("SELECT addgeometrycolumn('public', 'mytable', 'geom', 4326, 'POINT', 2)", true),
+      validateQuery(
+        "SELECT addgeometrycolumn('public', 'mytable', 'geom', 4326, 'POINT', 2)",
+        true,
+      ),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
   it("blocks dropgeometrycolumn", async () => {
