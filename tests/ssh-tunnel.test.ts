@@ -37,9 +37,12 @@ const baseEnv: Env = {
   DB_MAX_ROWS: 1000,
   DB_SSL_CA: undefined,
   DB_SSL_REJECT_UNAUTHORIZED: true,
+  DB_CONNECTION_POOL_SIZE: 5,
+  DB_CONNECTION_TIMEOUT_MS: 10000,
+  DB_QUERY_TIMEOUT_SECONDS: 15,
   SSH_STRICT_HOST_KEY_CHECKING: true,
   SSH_PASSWORD: undefined,
-  SSH_KEEPALIVE_INTERVAL_MS: 0,
+  SSH_KEEPALIVE_INTERVAL_MS: undefined,
   SSH_KEEPALIVE_COUNT_MAX: 3,
   SSH_TRUST_ON_FIRST_USE: true,
   SSH_KNOWN_HOSTS_PATH: undefined,
@@ -217,7 +220,11 @@ describe("buildSshTunnel", () => {
   });
 
   it("should pass custom SSH_KEEPALIVE_COUNT_MAX to sshOptions", async () => {
-    const env = { ...baseEnv, SSH_KEEPALIVE_COUNT_MAX: 5 };
+    const env = {
+      ...baseEnv,
+      SSH_KEEPALIVE_INTERVAL_MS: 10000,
+      SSH_KEEPALIVE_COUNT_MAX: 5,
+    };
     await buildSshTunnel(env, baseSshConfig);
     const [, , sshOptions] = vi.mocked(createTunnel).mock.calls[0];
     expect((sshOptions as any).keepaliveCountMax).toBe(5);

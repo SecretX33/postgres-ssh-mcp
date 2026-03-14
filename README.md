@@ -107,7 +107,7 @@ These are all environment variables that can be used to configure this MCP serve
 | `SSH_IDENTITY_FILE`            | —       | Absolute path or `~/...` to private key file                                  |
 | `SSH_KEY_PASSPHRASE`           | —       | Passphrase for an encrypted private key                                       |
 | `SSH_PASSWORD`                 | —       | SSH password (alternative to key-based auth)                                  |
-| `SSH_KEEPALIVE_INTERVAL_MS`    | `0`     | Milliseconds between SSH keepalive probes (0 to disable)                      |
+| `SSH_KEEPALIVE_INTERVAL_MS`    | —       | Milliseconds between SSH keepalive probes (disabled when unset; minimum 1000) |
 | `SSH_KEEPALIVE_COUNT_MAX`      | `3`     | Max unanswered keepalive probes before dropping the connection                |
 | `SSH_TRUST_ON_FIRST_USE`       | `true`  | Auto-accept and save unknown SSH host keys on first connection                |
 | `SSH_KNOWN_HOSTS_PATH`         | —       | Path to custom known_hosts file (default: `~/.ssh/known_hosts`)               |
