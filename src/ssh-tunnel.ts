@@ -44,6 +44,10 @@ export async function buildSshTunnel(
     sshOptions.passphrase = env.SSH_KEY_PASSPHRASE;
   }
 
+  if (env.SSH_PASSWORD) {
+    sshOptions.password = env.SSH_PASSWORD;
+  }
+
   if (!sshConfig.strictHostKeyChecking) {
     sshOptions.hostVerifier = () => true;
   }

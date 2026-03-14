@@ -35,6 +35,7 @@ export const EnvSchema = z
     SSH_STRICT_HOST_KEY_CHECKING: BooleanType.default(true),
     SSH_IDENTITY_FILE: NonEmptyOptionalString,
     SSH_KEY_PASSPHRASE: NonEmptyOptionalString,
+    SSH_PASSWORD: NonEmptyOptionalString,
   })
   .superRefine((data, ctx) => {
     const hasHost = data.SSH_HOST !== undefined;

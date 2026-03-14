@@ -1,7 +1,7 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 
 vi.mock("tunnel-ssh", () => ({ createTunnel: vi.fn() }));
-vi.mock("node:fs", () => ({ existsSync: vi.fn(), readFileSync: vi.fn() }));
+vi.mock("node:fs", () => ({ existsSync: vi.fn(), readFileSync: vi.fn(), statSync: vi.fn() }));
 
 import { buildSshTunnel } from "../src/ssh-tunnel.js";
 import { createTunnel } from "tunnel-ssh";
@@ -27,6 +27,7 @@ const baseEnv: Env = {
   DB_SSL_CA: undefined,
   DB_SSL_REJECT_UNAUTHORIZED: true,
   SSH_STRICT_HOST_KEY_CHECKING: true,
+  SSH_PASSWORD: undefined,
 };
 
 const baseSshConfig: SshHostConfig = {
@@ -48,6 +49,7 @@ beforeEach(() => {
   vi.mocked(createTunnel).mockResolvedValue([mockServer as any, mockClient as any]);
   vi.mocked(fs.existsSync).mockReturnValue(true);
   vi.mocked(fs.readFileSync).mockReturnValue(fakeBuffer);
+  vi.mocked(fs.statSync).mockReturnValue({ mode: 0o100600 } as fs.Stats);
 });
 
 afterEach(() => {
@@ -183,5 +185,12 @@ describe("buildSshTunnel", () => {
     });
     expect(() => handler(new Error("ssh broke"))).toThrow("process.exit called");
     expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it("should pass password to sshOptions when SSH_PASSWORD is set", async () => {
+    const env = { ...baseEnv, SSH_PASSWORD: "secret123" };
+    await buildSshTunnel(env, baseSshConfig);
+    const [, , sshOptions] = vi.mocked(createTunnel).mock.calls[0];
+    expect((sshOptions as any).password).toBe("secret123");
   });
 });

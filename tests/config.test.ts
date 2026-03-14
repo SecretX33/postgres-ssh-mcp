@@ -535,6 +535,19 @@ describe("EnvSchema", () => {
     });
     expect(result.DB_SSL_REJECT_UNAUTHORIZED).toBe(false);
   });
+
+  it("should accept SSH_PASSWORD as optional string", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+      SSH_HOSTNAME: "bastion.example.com",
+      SSH_USER: "admin",
+      SSH_PASSWORD: "secret",
+    });
+    expect(result.SSH_PASSWORD).toBe("secret");
+  });
 });
 
 describe("parseSshConfigFile", () => {
