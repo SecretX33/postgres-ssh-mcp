@@ -23,6 +23,7 @@ export const EnvSchema = z
     DB_QUERY_TIMEOUT_SECONDS: z.coerce.number().int().min(0).default(15),
     DB_READ_ONLY: BooleanType.default(true),
     DB_SSL: BooleanType.default(false),
+    DB_MAX_ROWS: z.coerce.number().int().min(1).default(1000),
     // Mode 1: SSH config file alias
     SSH_HOST: NonEmptyOptionalString,
     // Mode 2: explicit SSH connection

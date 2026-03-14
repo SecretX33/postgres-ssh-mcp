@@ -470,6 +470,39 @@ describe("EnvSchema", () => {
     });
     expect(result.SSH_KEY_PASSPHRASE).toBe("secret");
   });
+
+  it("should default DB_MAX_ROWS to 1000", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+    });
+    expect(result.DB_MAX_ROWS).toBe(1000);
+  });
+
+  it("should accept custom DB_MAX_ROWS", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+      DB_MAX_ROWS: "500",
+    });
+    expect(result.DB_MAX_ROWS).toBe(500);
+  });
+
+  it("should reject DB_MAX_ROWS below 1", () => {
+    expect(() =>
+      EnvSchema.parse({
+        DB_HOST: "x",
+        DB_NAME: "x",
+        DB_USER: "x",
+        DB_PASSWORD: "x",
+        DB_MAX_ROWS: "0",
+      }),
+    ).toThrow();
+  });
 });
 
 describe("parseSshConfigFile", () => {

@@ -283,6 +283,7 @@ describe("createDatabasePool", () => {
     DB_CONNECTION_POOL_SIZE: 5,
     DB_CONNECTION_TIMEOUT_MS: 10000,
     DB_QUERY_TIMEOUT_SECONDS: 15,
+    DB_MAX_ROWS: 1000,
     SSH_STRICT_HOST_KEY_CHECKING: true,
   };
 

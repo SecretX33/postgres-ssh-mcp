@@ -23,6 +23,7 @@ const baseEnv: Env = {
   DB_PASSWORD: "p",
   DB_READ_ONLY: true,
   DB_SSL: false,
+  DB_MAX_ROWS: 1000,
   SSH_STRICT_HOST_KEY_CHECKING: true,
 };
 
