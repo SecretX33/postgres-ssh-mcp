@@ -39,6 +39,8 @@ export const EnvSchema = z
     SSH_KEEPALIVE_INTERVAL_MS: z.coerce.number().int().min(0).default(10000),
     SSH_TRUST_ON_FIRST_USE: BooleanType.default(true),
     SSH_KNOWN_HOSTS_PATH: NonEmptyOptionalString,
+    SSH_MAX_RECONNECT_ATTEMPTS: z.coerce.number().int().min(-1).default(5),
+    POOL_DRAIN_TIMEOUT_MS: z.coerce.number().int().min(0).default(5000),
   })
   .superRefine((data, ctx) => {
     const hasHost = data.SSH_HOST !== undefined;

@@ -590,6 +590,37 @@ describe("EnvSchema", () => {
     });
     expect(result.SSH_KNOWN_HOSTS_PATH).toBe("/custom/known_hosts");
   });
+
+  it("should default SSH_MAX_RECONNECT_ATTEMPTS to 5", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+    });
+    expect(result.SSH_MAX_RECONNECT_ATTEMPTS).toBe(5);
+  });
+
+  it("should accept SSH_MAX_RECONNECT_ATTEMPTS of -1 for unlimited", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+      SSH_MAX_RECONNECT_ATTEMPTS: "-1",
+    });
+    expect(result.SSH_MAX_RECONNECT_ATTEMPTS).toBe(-1);
+  });
+
+  it("should default POOL_DRAIN_TIMEOUT_MS to 5000", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+    });
+    expect(result.POOL_DRAIN_TIMEOUT_MS).toBe(5000);
+  });
 });
 
 describe("parseSshConfigFile", () => {
