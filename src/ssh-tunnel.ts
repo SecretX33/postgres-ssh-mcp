@@ -39,6 +39,16 @@ export async function buildSshTunnel(
     if (!fs.existsSync(sshConfig.identityFile)) {
       throw new Error(`SSH identity file not found at ${sshConfig.identityFile}`);
     }
+    if (process.platform !== "win32") {
+      const stat = fs.statSync(sshConfig.identityFile);
+      const mode = stat.mode & 0o777;
+      if (mode & 0o077) {
+        console.error(
+          `WARNING: SSH identity file "${sshConfig.identityFile}" has permissions ${mode.toString(8)}. ` +
+            `It should be 600 or 400. Other users may be able to read your private key.`,
+        );
+      }
+    }
     sshOptions.privateKey = fs.readFileSync(sshConfig.identityFile);
   }
 

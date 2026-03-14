@@ -1,7 +1,11 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 
 vi.mock("tunnel-ssh", () => ({ createTunnel: vi.fn() }));
-vi.mock("node:fs", () => ({ existsSync: vi.fn(), readFileSync: vi.fn(), statSync: vi.fn() }));
+vi.mock("node:fs", () => ({
+  existsSync: vi.fn(),
+  readFileSync: vi.fn(),
+  statSync: vi.fn(),
+}));
 
 import { buildSshTunnel } from "../src/ssh-tunnel.js";
 import { createTunnel } from "tunnel-ssh";
@@ -201,5 +205,37 @@ describe("buildSshTunnel", () => {
     const [, , sshOptions] = vi.mocked(createTunnel).mock.calls[0];
     expect((sshOptions as any).keepaliveInterval).toBe(5000);
     expect((sshOptions as any).keepaliveCountMax).toBe(3);
+  });
+
+  it("should warn when identity file has loose permissions", async () => {
+    const consoleSpy = vi.spyOn(console, "error");
+    vi.mocked(fs.statSync).mockReturnValue({ mode: 0o100644 } as fs.Stats);
+    const originalPlatform = process.platform;
+    Object.defineProperty(process, "platform", { value: "linux" });
+
+    const config: SshHostConfig = {
+      ...baseSshConfig,
+      identityFile: "/home/user/.ssh/id_rsa",
+    };
+    await buildSshTunnel(baseEnv, config);
+
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("WARNING"));
+    Object.defineProperty(process, "platform", { value: originalPlatform });
+  });
+
+  it("should not warn when identity file has correct permissions", async () => {
+    const consoleSpy = vi.spyOn(console, "error");
+    vi.mocked(fs.statSync).mockReturnValue({ mode: 0o100600 } as fs.Stats);
+    const originalPlatform = process.platform;
+    Object.defineProperty(process, "platform", { value: "linux" });
+
+    const config: SshHostConfig = {
+      ...baseSshConfig,
+      identityFile: "/home/user/.ssh/id_rsa",
+    };
+    await buildSshTunnel(baseEnv, config);
+
+    expect(consoleSpy).not.toHaveBeenCalledWith(expect.stringContaining("WARNING"));
+    Object.defineProperty(process, "platform", { value: originalPlatform });
   });
 });
