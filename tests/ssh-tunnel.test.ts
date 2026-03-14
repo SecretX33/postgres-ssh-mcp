@@ -42,6 +42,8 @@ const baseEnv: Env = {
   SSH_KEEPALIVE_INTERVAL_MS: 10000,
   SSH_TRUST_ON_FIRST_USE: true,
   SSH_KNOWN_HOSTS_PATH: undefined,
+  SSH_MAX_RECONNECT_ATTEMPTS: 5,
+  POOL_DRAIN_TIMEOUT_MS: 5000,
 };
 
 const baseSshConfig: SshHostConfig = {
@@ -188,17 +190,14 @@ describe("buildSshTunnel", () => {
     expect((sshOptions as any).passphrase).toBeUndefined();
   });
 
-  it("client error handler calls process.exit(1)", async () => {
+  it("client error handler logs error message", async () => {
+    const consoleSpy = vi.spyOn(console, "error");
     await buildSshTunnel(baseEnv, baseSshConfig);
     const errorCall = mockClient.on.mock.calls.find((c) => c[0] === "error");
     expect(errorCall).toBeDefined();
     const handler = errorCall![1] as Function;
-
-    const exitSpy = vi.spyOn(process, "exit").mockImplementation((): never => {
-      throw new Error("process.exit called");
-    });
-    expect(() => handler(new Error("ssh broke"))).toThrow("process.exit called");
-    expect(exitSpy).toHaveBeenCalledWith(1);
+    handler(new Error("ssh broke"));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("ssh broke"));
   });
 
   it("should pass password to sshOptions when SSH_PASSWORD is set", async () => {
@@ -267,5 +266,15 @@ describe("buildSshTunnel", () => {
     await buildSshTunnel(env, config);
     const [, , sshOptions] = vi.mocked(createTunnel).mock.calls[0];
     expect((sshOptions as any).hostVerifier("anything")).toBe(true);
+  });
+
+  it("returns TunnelInfo with on() method for events", async () => {
+    const result = await buildSshTunnel(baseEnv, baseSshConfig);
+    expect(typeof result!.on).toBe("function");
+  });
+
+  it("registers close handler on SSH client", async () => {
+    await buildSshTunnel(baseEnv, baseSshConfig);
+    expect(mockClient.on).toHaveBeenCalledWith("close", expect.any(Function));
   });
 });

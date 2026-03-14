@@ -9,11 +9,21 @@ import * as fs from "node:fs";
 import * as net from "node:net";
 import * as path from "node:path";
 import * as os from "node:os";
+import { EventEmitter } from "node:events";
 import { HostKeyVerifier } from "./host-key-verifier.js";
+
+export interface TunnelEvents {
+  reconnected: [{ oldPort: number; newPort: number }];
+  failed: [Error];
+}
 
 export interface TunnelInfo {
   localPort: number;
   close: () => void;
+  on<K extends keyof TunnelEvents>(
+    event: K,
+    listener: (...args: TunnelEvents[K]) => void,
+  ): void;
 }
 
 export async function buildSshTunnel(
@@ -29,6 +39,105 @@ export async function buildSshTunnel(
     `Connecting to SSH bastion ${sshConfig.hostname}:${sshConfig.port} as ${sshConfig.user}...`,
   );
 
+  const sshOptions = buildSshOptions(env, sshConfig);
+  const serverOptions: ServerOptions = { host: "127.0.0.1", port: 0 };
+  const forwardOptions: ForwardOptions = { dstAddr: env.DB_HOST, dstPort: env.DB_PORT };
+
+  const [server, client] = await createTunnel(
+    { autoClose: false, reconnectOnError: false },
+    serverOptions,
+    sshOptions,
+    forwardOptions,
+  );
+
+  const addr = server.address() as net.AddressInfo;
+  console.error(`SSH tunnel established on local port ${addr.port}`);
+
+  const emitter = new EventEmitter();
+  let currentPort = addr.port;
+  let reconnecting = false;
+
+  const reconnect = async () => {
+    if (reconnecting) return;
+    if (env.SSH_MAX_RECONNECT_ATTEMPTS === 0) {
+      console.error("[SSH] Tunnel closed. Reconnection disabled.");
+      process.exit(1);
+    }
+    reconnecting = true;
+    const maxAttempts = env.SSH_MAX_RECONNECT_ATTEMPTS;
+    let attempt = 0;
+
+    while (maxAttempts === -1 || attempt < maxAttempts) {
+      attempt++;
+      const delay = Math.min(1000 * Math.pow(2, attempt - 1), 30000);
+      console.error(
+        `[SSH] Reconnecting (attempt ${attempt}${maxAttempts === -1 ? "" : `/${maxAttempts}`}) in ${delay}ms...`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, delay));
+
+      try {
+        const newSshOptions = buildSshOptions(env, sshConfig);
+        const [newServer, newClient] = await createTunnel(
+          { autoClose: false, reconnectOnError: false },
+          { host: "127.0.0.1", port: 0 },
+          newSshOptions,
+          forwardOptions,
+        );
+
+        const newAddr = newServer.address() as net.AddressInfo;
+        const oldPort = currentPort;
+        currentPort = newAddr.port;
+
+        newClient.on("close", () => {
+          console.error("[SSH] Tunnel connection closed");
+          reconnect();
+        });
+
+        newClient.on("error", (err: unknown) => {
+          const message = err instanceof Error ? err.message : String(err);
+          console.error(`[SSH] Tunnel error: ${message}`);
+        });
+
+        console.error(`[SSH] Tunnel re-established on local port ${newAddr.port}`);
+        reconnecting = false;
+        emitter.emit("reconnected", { oldPort, newPort: newAddr.port });
+        return;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`[SSH] Reconnect attempt ${attempt} failed: ${message}`);
+      }
+    }
+
+    reconnecting = false;
+    const error = new Error(
+      `SSH tunnel reconnection failed after ${maxAttempts} attempts`,
+    );
+    emitter.emit("failed", error);
+  };
+
+  client.on("close", () => {
+    console.error("[SSH] Tunnel connection closed");
+    reconnect();
+  });
+
+  client.on("error", (err: unknown) => {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[SSH] Tunnel error: ${message}`);
+  });
+
+  return {
+    localPort: addr.port,
+    close: () => {
+      server.close();
+      client.end();
+    },
+    on: (event: string, listener: (...args: any[]) => void) => {
+      emitter.on(event, listener);
+    },
+  };
+}
+
+function buildSshOptions(env: Env, sshConfig: SshHostConfig): SshOptions {
   const sshOptions: SshOptions = {
     host: sshConfig.hostname,
     port: sshConfig.port,
@@ -84,30 +193,5 @@ export async function buildSshTunnel(
     };
   }
 
-  const serverOptions: ServerOptions = { host: "127.0.0.1", port: 0 };
-  const forwardOptions: ForwardOptions = { dstAddr: env.DB_HOST, dstPort: env.DB_PORT };
-
-  const [server, client] = await createTunnel(
-    { autoClose: false, reconnectOnError: false },
-    serverOptions,
-    sshOptions,
-    forwardOptions,
-  );
-
-  client.on("error", (err: unknown) => {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error(`Fatal: SSH tunnel error after connection: ${message}`);
-    process.exit(1);
-  });
-
-  const addr = server.address() as net.AddressInfo;
-  console.error(`SSH tunnel established on local port ${addr.port}`);
-
-  return {
-    localPort: addr.port,
-    close: () => {
-      server.close();
-      client.end();
-    },
-  };
+  return sshOptions;
 }
