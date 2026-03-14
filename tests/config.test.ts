@@ -570,6 +570,27 @@ describe("EnvSchema", () => {
     expect(result.SSH_KEEPALIVE_INTERVAL_MS).toBe(5000);
   });
 
+  it("should default SSH_KEEPALIVE_COUNT_MAX to 3", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+    });
+    expect(result.SSH_KEEPALIVE_COUNT_MAX).toBe(3);
+  });
+
+  it("should accept custom SSH_KEEPALIVE_COUNT_MAX", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+      SSH_KEEPALIVE_COUNT_MAX: "5",
+    });
+    expect(result.SSH_KEEPALIVE_COUNT_MAX).toBe(5);
+  });
+
   it("should default SSH_TRUST_ON_FIRST_USE to true", () => {
     const result = EnvSchema.parse({
       DB_HOST: "x",

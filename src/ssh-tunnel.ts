@@ -144,7 +144,9 @@ function buildSshOptions(env: Env, sshConfig: SshHostConfig): SshOptions {
     username: sshConfig.user,
     readyTimeout: 10000,
     keepaliveInterval: env.SSH_KEEPALIVE_INTERVAL_MS,
-    keepaliveCountMax: 3,
+    keepaliveCountMax: env.SSH_KEEPALIVE_INTERVAL_MS
+      ? env.SSH_KEEPALIVE_COUNT_MAX
+      : undefined,
   };
 
   if (sshConfig.identityFile) {

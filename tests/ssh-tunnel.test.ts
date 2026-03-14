@@ -40,6 +40,7 @@ const baseEnv: Env = {
   SSH_STRICT_HOST_KEY_CHECKING: true,
   SSH_PASSWORD: undefined,
   SSH_KEEPALIVE_INTERVAL_MS: 0,
+  SSH_KEEPALIVE_COUNT_MAX: 3,
   SSH_TRUST_ON_FIRST_USE: true,
   SSH_KNOWN_HOSTS_PATH: undefined,
   SSH_MAX_RECONNECT_ATTEMPTS: 5,
@@ -213,6 +214,13 @@ describe("buildSshTunnel", () => {
     const [, , sshOptions] = vi.mocked(createTunnel).mock.calls[0];
     expect((sshOptions as any).keepaliveInterval).toBe(5000);
     expect((sshOptions as any).keepaliveCountMax).toBe(3);
+  });
+
+  it("should pass custom SSH_KEEPALIVE_COUNT_MAX to sshOptions", async () => {
+    const env = { ...baseEnv, SSH_KEEPALIVE_COUNT_MAX: 5 };
+    await buildSshTunnel(env, baseSshConfig);
+    const [, , sshOptions] = vi.mocked(createTunnel).mock.calls[0];
+    expect((sshOptions as any).keepaliveCountMax).toBe(5);
   });
 
   it("should warn when identity file has loose permissions", async () => {
