@@ -90,19 +90,28 @@ These are all environment variables that can be used to configure this MCP serve
 
 | Variable                       | Default | Description                                              |
 |--------------------------------|---------|----------------------------------------------------------|
-| `DB_PORT`                      | `5432`  | Postgres port                                            |
-| `DB_READ_ONLY`                 | `true`  | Set to `false` to allow write queries (`run_query` only) |
-| `DB_SSL`                       | `false` | Enable TLS for the database connection                   |
-| `DB_CONNECTION_POOL_SIZE`      | `5`     | Maximum number of connections in the pool                |
-| `DB_CONNECTION_TIMEOUT_MS`     | `10000` | Milliseconds to wait for a connection from the pool      |
-| `DB_QUERY_TIMEOUT_SECONDS`     | `15`    | How many seconds before a query is forcibly cancelled    |
-| `SSH_HOST`                     | —       | SSH config alias (reads `~/.ssh/config`)                 |
-| `SSH_HOSTNAME`                 | —       | Bastion hostname or IP                                   |
-| `SSH_USER`                     | —       | SSH login user                                           |
-| `SSH_PORT`                     | `22`    | SSH port                                                 |
-| `SSH_STRICT_HOST_KEY_CHECKING` | `true`  | Enables or disables strict host checking                 |
-| `SSH_IDENTITY_FILE`            | —       | Absolute path or `~/...` to private key file             |
-| `SSH_KEY_PASSPHRASE`           | —       | Passphrase for an encrypted private key                  |
+| `DB_PORT`                      | `5432`  | Postgres port                                                    |
+| `DB_READ_ONLY`                 | `true`  | Set to `false` to allow write queries (`run_query` only)         |
+| `DB_SSL`                       | `false` | Enable TLS for the database connection                           |
+| `DB_SSL_CA`                    | —       | Path to a custom CA certificate file (PEM) for SSL verification  |
+| `DB_SSL_REJECT_UNAUTHORIZED`   | `true`  | Set to `false` to skip SSL certificate validation (insecure)     |
+| `DB_MAX_ROWS`                  | `1000`  | Maximum rows returned per query. Uses cursor-based fetching in read-only mode |
+| `DB_CONNECTION_POOL_SIZE`      | `5`     | Maximum number of connections in the pool                         |
+| `DB_CONNECTION_TIMEOUT_MS`     | `10000` | Milliseconds to wait for a connection from the pool              |
+| `DB_QUERY_TIMEOUT_SECONDS`     | `15`    | How many seconds before a query is forcibly cancelled            |
+| `SSH_HOST`                     | —       | SSH config alias (reads `~/.ssh/config`)                         |
+| `SSH_HOSTNAME`                 | —       | Bastion hostname or IP                                           |
+| `SSH_USER`                     | —       | SSH login user                                                   |
+| `SSH_PORT`                     | `22`    | SSH port                                                         |
+| `SSH_STRICT_HOST_KEY_CHECKING` | `true`  | Enables or disables strict host checking                         |
+| `SSH_IDENTITY_FILE`            | —       | Absolute path or `~/...` to private key file                     |
+| `SSH_KEY_PASSPHRASE`           | —       | Passphrase for an encrypted private key                          |
+| `SSH_PASSWORD`                 | —       | SSH password (alternative to key-based auth)                     |
+| `SSH_KEEPALIVE_INTERVAL_MS`    | `0`     | Milliseconds between SSH keepalive probes (0 to disable)         |
+| `SSH_TRUST_ON_FIRST_USE`       | `true`  | Auto-accept and save unknown SSH host keys on first connection   |
+| `SSH_KNOWN_HOSTS_PATH`         | —       | Path to custom known_hosts file (default: `~/.ssh/known_hosts`)  |
+| `SSH_MAX_RECONNECT_ATTEMPTS`   | `5`     | Max SSH reconnection attempts (-1 for unlimited, 0 to disable)   |
+| `POOL_DRAIN_TIMEOUT_MS`        | `5000`  | Milliseconds to wait for old pool to drain during reconnection   |
 
 ## Development
 
