@@ -24,6 +24,8 @@ const baseEnv: Env = {
   DB_READ_ONLY: true,
   DB_SSL: false,
   DB_MAX_ROWS: 1000,
+  DB_SSL_CA: undefined,
+  DB_SSL_REJECT_UNAUTHORIZED: true,
   SSH_STRICT_HOST_KEY_CHECKING: true,
 };
 

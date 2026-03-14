@@ -503,6 +503,38 @@ describe("EnvSchema", () => {
       }),
     ).toThrow();
   });
+
+  it("should accept DB_SSL_CA as optional string", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+      DB_SSL_CA: "/path/to/ca.pem",
+    });
+    expect(result.DB_SSL_CA).toBe("/path/to/ca.pem");
+  });
+
+  it("should default DB_SSL_REJECT_UNAUTHORIZED to true", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+    });
+    expect(result.DB_SSL_REJECT_UNAUTHORIZED).toBe(true);
+  });
+
+  it("should accept DB_SSL_REJECT_UNAUTHORIZED as false", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+      DB_SSL_REJECT_UNAUTHORIZED: "false",
+    });
+    expect(result.DB_SSL_REJECT_UNAUTHORIZED).toBe(false);
+  });
 });
 
 describe("parseSshConfigFile", () => {
