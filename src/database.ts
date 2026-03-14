@@ -10,6 +10,7 @@ export async function runQuery(
   pool: Pool,
   sql: string,
   readOnly: boolean,
+  maxRows?: number,
 ): Promise<ToolResult> {
   try {
     await validateQuery(sql, readOnly);
@@ -31,12 +32,31 @@ export async function runQuery(
       await client.query("BEGIN TRANSACTION READ ONLY");
       startedTransaction = true;
     }
-    const result = await client.query(sql);
+
+    let rows: Record<string, unknown>[];
+    let truncated = false;
+
+    if (readOnly && maxRows !== undefined) {
+      const cursorName = `mcp_cursor_${Date.now()}`;
+      await client.query(`DECLARE ${cursorName} CURSOR FOR ${sql}`);
+      const result = await client.query(`FETCH ${maxRows + 1} FROM ${cursorName}`);
+      truncated = result.rows.length > maxRows;
+      rows = truncated ? result.rows.slice(0, maxRows) : result.rows;
+      await client.query(`CLOSE ${cursorName}`);
+    } else {
+      const result = await client.query(sql);
+      if (maxRows !== undefined && result.rows.length > maxRows) {
+        truncated = true;
+        rows = result.rows.slice(0, maxRows);
+      } else {
+        rows = result.rows;
+      }
+    }
 
     const text =
-      result.rows.length === 0
+      rows.length === 0
         ? "Query returned no rows"
-        : JSON.stringify({ rows: result.rows, rowCount: result.rowCount }, null, 2);
+        : JSON.stringify({ rows, rowCount: rows.length, truncated }, null, 2);
 
     return {
       content: [{ type: "text", text: text }],

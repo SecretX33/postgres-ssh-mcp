@@ -264,6 +264,80 @@ describe("runQuery – validation integration", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// runQuery – MAX_ROWS limiting
+// ---------------------------------------------------------------------------
+
+describe("runQuery – MAX_ROWS limiting", () => {
+  it("should use DECLARE CURSOR and FETCH when readOnly and maxRows is set", async () => {
+    const mockRows = Array.from({ length: 5 }, (_, i) => ({ id: i }));
+    const { pool, client } = makePool((sql) => {
+      if (sql === "BEGIN TRANSACTION READ ONLY") return Promise.resolve(makeResult([]));
+      if (typeof sql === "string" && sql.startsWith("DECLARE"))
+        return Promise.resolve(makeResult([]));
+      if (typeof sql === "string" && sql.startsWith("FETCH"))
+        return Promise.resolve(makeResult(mockRows));
+      if (typeof sql === "string" && sql.startsWith("CLOSE"))
+        return Promise.resolve(makeResult([]));
+      return Promise.resolve(makeResult([]));
+    });
+
+    const result = await runQuery(pool, "SELECT * FROM t", true, 10);
+    const parsed = JSON.parse((result.content[0] as { text: string }).text);
+
+    expect(parsed.truncated).toBe(false);
+    expect(parsed.rows).toHaveLength(5);
+    const calls = (client.query as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
+    expect(calls.some((c: string) => c.startsWith("DECLARE"))).toBe(true);
+  });
+
+  it("should set truncated=true when rows exceed maxRows", async () => {
+    const mockRows = Array.from({ length: 6 }, (_, i) => ({ id: i }));
+    const { pool } = makePool((sql) => {
+      if (sql === "BEGIN TRANSACTION READ ONLY") return Promise.resolve(makeResult([]));
+      if (typeof sql === "string" && sql.startsWith("DECLARE"))
+        return Promise.resolve(makeResult([]));
+      if (typeof sql === "string" && sql.startsWith("FETCH"))
+        return Promise.resolve(makeResult(mockRows));
+      if (typeof sql === "string" && sql.startsWith("CLOSE"))
+        return Promise.resolve(makeResult([]));
+      return Promise.resolve(makeResult([]));
+    });
+
+    const result = await runQuery(pool, "SELECT * FROM t", true, 5);
+    const parsed = JSON.parse((result.content[0] as { text: string }).text);
+
+    expect(parsed.truncated).toBe(true);
+    expect(parsed.rows).toHaveLength(5);
+    expect(parsed.rowCount).toBe(5);
+  });
+
+  it("should not use cursor when readOnly is false", async () => {
+    const mockRows = Array.from({ length: 3 }, (_, i) => ({ id: i }));
+    const { pool, client } = makePool(() => Promise.resolve(makeResult(mockRows)));
+
+    const result = await runQuery(pool, "SELECT * FROM t", false, 5);
+    const parsed = JSON.parse((result.content[0] as { text: string }).text);
+
+    expect(parsed.truncated).toBe(false);
+    const calls = (client.query as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
+    expect(
+      calls.some((c: string) => typeof c === "string" && c.startsWith("DECLARE")),
+    ).toBe(false);
+  });
+
+  it("should truncate rows in write mode when exceeding maxRows", async () => {
+    const mockRows = Array.from({ length: 6 }, (_, i) => ({ id: i }));
+    const { pool } = makePool(() => Promise.resolve(makeResult(mockRows)));
+
+    const result = await runQuery(pool, "SELECT * FROM t", false, 5);
+    const parsed = JSON.parse((result.content[0] as { text: string }).text);
+
+    expect(parsed.truncated).toBe(true);
+    expect(parsed.rows).toHaveLength(5);
+  });
+});
+
 vi.mock("pg", () => {
   const Pool = vi.fn();
   Pool.prototype.on = vi.fn();

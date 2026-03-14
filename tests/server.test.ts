@@ -103,14 +103,21 @@ describe("buildServer", () => {
     buildServer(mockPool, true);
     const { handler } = getTool("run_query");
     await handler({ sql: "SELECT 1" });
-    expect(runQuery).toHaveBeenCalledWith(mockPool, "SELECT 1", true);
+    expect(runQuery).toHaveBeenCalledWith(mockPool, "SELECT 1", true, undefined);
   });
 
   it("run_query handler passes readOnly=false", async () => {
     buildServer(mockPool, false);
     const { handler } = getTool("run_query");
     await handler({ sql: "SELECT 1" });
-    expect(runQuery).toHaveBeenCalledWith(mockPool, "SELECT 1", false);
+    expect(runQuery).toHaveBeenCalledWith(mockPool, "SELECT 1", false, undefined);
+  });
+
+  it("run_query handler passes maxRows when provided", async () => {
+    buildServer(mockPool, true, 500);
+    const { handler } = getTool("run_query");
+    await handler({ sql: "SELECT 1" });
+    expect(runQuery).toHaveBeenCalledWith(mockPool, "SELECT 1", true, 500);
   });
 
   it("list_schemas handler calls runSchemaQuery(pool)", async () => {

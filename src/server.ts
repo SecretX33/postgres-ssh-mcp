@@ -15,7 +15,7 @@ import {
   runSchemaQuery,
 } from "./database.js";
 
-export function buildServer(pool: Pool, readOnly: boolean): McpServer {
+export function buildServer(pool: Pool, readOnly: boolean, maxRows?: number): McpServer {
   const serverInfo = {
     name: PROJECT_INFO.name,
     version: PROJECT_INFO.version,
@@ -32,7 +32,7 @@ export function buildServer(pool: Pool, readOnly: boolean): McpServer {
         sql: z.string().describe("The SQL query to execute"),
       }),
     },
-    ({ sql }) => runQuery(pool, sql, readOnly),
+    ({ sql }) => runQuery(pool, sql, readOnly, maxRows),
   );
 
   server.registerTool(
@@ -79,7 +79,7 @@ async function main() {
   const sshTunnel = await buildSshTunnel(env, sshConfig);
   const pool = await createDatabasePool(env, sshTunnel);
 
-  const server = buildServer(pool, env.DB_READ_ONLY);
+  const server = buildServer(pool, env.DB_READ_ONLY, env.DB_MAX_ROWS);
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
