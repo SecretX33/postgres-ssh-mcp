@@ -31,6 +31,8 @@ export async function buildSshTunnel(
     port: sshConfig.port,
     username: sshConfig.user,
     readyTimeout: 10000,
+    keepaliveInterval: env.SSH_KEEPALIVE_INTERVAL_MS,
+    keepaliveCountMax: 3,
   };
 
   if (sshConfig.identityFile) {

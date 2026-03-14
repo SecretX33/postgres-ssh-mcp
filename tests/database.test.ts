@@ -367,6 +367,7 @@ describe("createDatabasePool", () => {
     DB_SSL_REJECT_UNAUTHORIZED: true,
     SSH_STRICT_HOST_KEY_CHECKING: true,
     SSH_PASSWORD: undefined,
+    SSH_KEEPALIVE_INTERVAL_MS: 10000,
   };
 
   beforeEach(() => {
@@ -443,6 +444,7 @@ describe("createDatabasePool – SSL CA", () => {
     DB_SSL_REJECT_UNAUTHORIZED: true,
     SSH_STRICT_HOST_KEY_CHECKING: true,
     SSH_PASSWORD: undefined,
+    SSH_KEEPALIVE_INTERVAL_MS: 10000,
   };
 
   beforeEach(() => {

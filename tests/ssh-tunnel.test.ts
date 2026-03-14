@@ -28,6 +28,7 @@ const baseEnv: Env = {
   DB_SSL_REJECT_UNAUTHORIZED: true,
   SSH_STRICT_HOST_KEY_CHECKING: true,
   SSH_PASSWORD: undefined,
+  SSH_KEEPALIVE_INTERVAL_MS: 10000,
 };
 
 const baseSshConfig: SshHostConfig = {
@@ -192,5 +193,13 @@ describe("buildSshTunnel", () => {
     await buildSshTunnel(env, baseSshConfig);
     const [, , sshOptions] = vi.mocked(createTunnel).mock.calls[0];
     expect((sshOptions as any).password).toBe("secret123");
+  });
+
+  it("should pass keepaliveInterval to sshOptions", async () => {
+    const env = { ...baseEnv, SSH_KEEPALIVE_INTERVAL_MS: 5000 };
+    await buildSshTunnel(env, baseSshConfig);
+    const [, , sshOptions] = vi.mocked(createTunnel).mock.calls[0];
+    expect((sshOptions as any).keepaliveInterval).toBe(5000);
+    expect((sshOptions as any).keepaliveCountMax).toBe(3);
   });
 });
