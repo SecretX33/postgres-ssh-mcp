@@ -7,6 +7,9 @@ import {
 } from "tunnel-ssh";
 import * as fs from "node:fs";
 import * as net from "node:net";
+import * as path from "node:path";
+import * as os from "node:os";
+import { HostKeyVerifier } from "./host-key-verifier.js";
 
 export interface TunnelInfo {
   localPort: number;
@@ -62,6 +65,23 @@ export async function buildSshTunnel(
 
   if (!sshConfig.strictHostKeyChecking) {
     sshOptions.hostVerifier = () => true;
+  } else {
+    const knownHostsPath =
+      env.SSH_KNOWN_HOSTS_PATH ?? path.join(os.homedir(), ".ssh", "known_hosts");
+    const verifier = new HostKeyVerifier(knownHostsPath, env.SSH_TRUST_ON_FIRST_USE);
+    sshOptions.hostVerifier = (key: string) => {
+      const publicKey = Buffer.from(key, "hex");
+      const result = verifier.verifyHostKey(
+        sshConfig.hostname,
+        sshConfig.port,
+        "ssh-rsa",
+        publicKey,
+      );
+      if (!result.verified) {
+        console.error(`[SSH] Host key verification failed: ${result.reason}`);
+      }
+      return result.verified;
+    };
   }
 
   const serverOptions: ServerOptions = { host: "127.0.0.1", port: 0 };

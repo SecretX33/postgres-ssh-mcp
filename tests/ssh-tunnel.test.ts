@@ -6,12 +6,19 @@ vi.mock("node:fs", () => ({
   readFileSync: vi.fn(),
   statSync: vi.fn(),
 }));
+vi.mock("../src/host-key-verifier.js", () => {
+  function MockHostKeyVerifier(this: { verifyHostKey: ReturnType<typeof vi.fn> }) {
+    this.verifyHostKey = vi.fn().mockReturnValue({ verified: true, reason: "ok" });
+  }
+  return { HostKeyVerifier: vi.fn(MockHostKeyVerifier) };
+});
 
 import { buildSshTunnel } from "../src/ssh-tunnel.js";
 import { createTunnel } from "tunnel-ssh";
 import * as fs from "node:fs";
 import type { Env } from "../src/config.js";
 import type { SshHostConfig } from "../src/config.js";
+import { HostKeyVerifier } from "../src/host-key-verifier.js";
 
 function makeMocks(port = 54321) {
   const mockServer = { address: vi.fn(() => ({ port })), close: vi.fn() };
@@ -112,11 +119,11 @@ describe("buildSshTunnel", () => {
     expect((sshOptions as any).hostVerifier()).toBe(true);
   });
 
-  it("does not set hostVerifier when strictHostKeyChecking=true", async () => {
+  it("sets hostVerifier with HostKeyVerifier when strictHostKeyChecking=true", async () => {
     const config: SshHostConfig = { ...baseSshConfig, strictHostKeyChecking: true };
     await buildSshTunnel(baseEnv, config);
     const [, , sshOptions] = vi.mocked(createTunnel).mock.calls[0];
-    expect((sshOptions as any).hostVerifier).toBeUndefined();
+    expect(typeof (sshOptions as any).hostVerifier).toBe("function");
   });
 
   it("calls createTunnel with { autoClose: false, reconnectOnError: false }", async () => {
@@ -239,5 +246,26 @@ describe("buildSshTunnel", () => {
 
     expect(consoleSpy).not.toHaveBeenCalledWith(expect.stringContaining("WARNING"));
     Object.defineProperty(process, "platform", { value: originalPlatform });
+  });
+
+  it("should use HostKeyVerifier when strictHostKeyChecking=true", async () => {
+    const env = {
+      ...baseEnv,
+      SSH_TRUST_ON_FIRST_USE: true,
+      SSH_KNOWN_HOSTS_PATH: "/tmp/known_hosts",
+    };
+    const config = { ...baseSshConfig, strictHostKeyChecking: true };
+    await buildSshTunnel(env, config);
+    expect(HostKeyVerifier).toHaveBeenCalledWith("/tmp/known_hosts", true);
+    const [, , sshOptions] = vi.mocked(createTunnel).mock.calls[0];
+    expect(typeof (sshOptions as any).hostVerifier).toBe("function");
+  });
+
+  it("should not use HostKeyVerifier when strictHostKeyChecking=false", async () => {
+    const env = { ...baseEnv, SSH_TRUST_ON_FIRST_USE: true };
+    const config = { ...baseSshConfig, strictHostKeyChecking: false };
+    await buildSshTunnel(env, config);
+    const [, , sshOptions] = vi.mocked(createTunnel).mock.calls[0];
+    expect((sshOptions as any).hostVerifier("anything")).toBe(true);
   });
 });
