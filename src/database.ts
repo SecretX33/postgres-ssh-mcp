@@ -175,8 +175,10 @@ export async function createDatabasePool(
     user: env.DB_USER,
     password: env.DB_PASSWORD,
     max: env.DB_CONNECTION_POOL_SIZE,
-    connectionTimeoutMillis: env.DB_CONNECTION_TIMEOUT_MS,
-    query_timeout: env.DB_QUERY_TIMEOUT_SECONDS,
+    connectionTimeoutMillis:
+      env.DB_CONNECTION_TIMEOUT_MS > 0 ? env.DB_CONNECTION_TIMEOUT_MS : undefined,
+    query_timeout:
+      env.DB_QUERY_TIMEOUT_SECONDS > 0 ? env.DB_QUERY_TIMEOUT_SECONDS : undefined,
     ssl,
   });
   db.on("error", (err) => {

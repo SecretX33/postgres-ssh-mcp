@@ -110,7 +110,9 @@ async function main() {
           ),
         ]);
       } catch {
-        console.error("[DB] Pool drain timeout, forcing close");
+        if (env.POOL_DRAIN_TIMEOUT_MS > 0) {
+          console.error("[DB] Pool drain timeout, forcing close");
+        }
         oldPool.end().catch(() => {});
       }
     });
