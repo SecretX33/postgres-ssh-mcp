@@ -15,7 +15,11 @@ import {
   runSchemaQuery,
 } from "./database.js";
 
-export function buildServer(pool: Pool, readOnly: boolean, maxRows?: number): McpServer {
+export function buildServer(
+  poolRef: { current: Pool },
+  readOnly: boolean,
+  maxRows?: number,
+): McpServer {
   const serverInfo = {
     name: PROJECT_INFO.name,
     version: PROJECT_INFO.version,
@@ -32,13 +36,13 @@ export function buildServer(pool: Pool, readOnly: boolean, maxRows?: number): Mc
         sql: z.string().describe("The SQL query to execute"),
       }),
     },
-    ({ sql }) => runQuery(pool, sql, readOnly, maxRows),
+    ({ sql }) => runQuery(poolRef.current, sql, readOnly, maxRows),
   );
 
   server.registerTool(
     "list_schemas",
     { description: "List all schemas in the database." },
-    () => runSchemaQuery(pool),
+    () => runSchemaQuery(poolRef.current),
   );
 
   server.registerTool(
@@ -49,7 +53,7 @@ export function buildServer(pool: Pool, readOnly: boolean, maxRows?: number): Mc
         schema: z.string().default("public").describe("Schema name"),
       }),
     },
-    ({ schema }) => runListTables(pool, schema),
+    ({ schema }) => runListTables(poolRef.current, schema),
   );
 
   server.registerTool(
@@ -61,7 +65,7 @@ export function buildServer(pool: Pool, readOnly: boolean, maxRows?: number): Mc
         table: z.string().describe("Table name"),
       }),
     },
-    ({ schema, table }) => runDescribeTable(pool, schema, table),
+    ({ schema, table }) => runDescribeTable(poolRef.current, schema, table),
   );
 
   return server;
@@ -77,17 +81,49 @@ async function main() {
   const sshConfig = resolveSshConfig(env);
 
   const sshTunnel = await buildSshTunnel(env, sshConfig);
-  const pool = await createDatabasePool(env, sshTunnel);
+  const poolRef = { current: await createDatabasePool(env, sshTunnel) };
 
-  const server = buildServer(pool, env.DB_READ_ONLY, env.DB_MAX_ROWS);
+  const server = buildServer(poolRef, env.DB_READ_ONLY, env.DB_MAX_ROWS);
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
   console.error(`Postgres SSH MCP server version ${PROJECT_INFO.version} ready`);
 
+  if (sshTunnel) {
+    sshTunnel.on("reconnected", async ({ oldPort, newPort }) => {
+      console.error(`[SSH] Tunnel reconnected: port ${oldPort} → ${newPort}`);
+      const oldPool = poolRef.current;
+
+      poolRef.current = await createDatabasePool(env, {
+        ...sshTunnel,
+        localPort: newPort,
+      });
+
+      try {
+        await Promise.race([
+          oldPool.end(),
+          new Promise((_, reject) =>
+            setTimeout(
+              () => reject(new Error("Pool drain timeout")),
+              env.POOL_DRAIN_TIMEOUT_MS,
+            ),
+          ),
+        ]);
+      } catch {
+        console.error("[DB] Pool drain timeout, forcing close");
+        oldPool.end().catch(() => {});
+      }
+    });
+
+    sshTunnel.on("failed", (error) => {
+      console.error(`[SSH] Tunnel reconnection failed permanently: ${error.message}`);
+      process.exit(1);
+    });
+  }
+
   const cleanup = async () => {
     console.error("Shutting down...");
-    await pool.end().catch(() => {});
+    await poolRef.current.end().catch(() => {});
     sshTunnel?.close();
     process.exit(0);
   };

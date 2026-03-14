@@ -58,84 +58,84 @@ function getTool(name: string) {
 
 describe("buildServer", () => {
   it("registers exactly 4 tools", () => {
-    buildServer(mockPool, true);
+    buildServer({ current: mockPool }, true);
     expect(registerToolSpy.mock.calls.length).toBe(4);
   });
 
   it("registers tools with correct names in order", () => {
-    buildServer(mockPool, true);
+    buildServer({ current: mockPool }, true);
     const names = registerToolSpy.mock.calls.map((c: any) => c[0]);
     expect(names).toEqual(["run_query", "list_schemas", "list_tables", "describe_table"]);
   });
 
   it("run_query description contains 'READ ONLY' when readOnly=true", () => {
-    buildServer(mockPool, true);
+    buildServer({ current: mockPool }, true);
     const { config } = getTool("run_query");
     expect(config.description).toContain("READ ONLY transaction");
   });
 
   it("run_query description omits 'READ ONLY' when readOnly=false", () => {
-    buildServer(mockPool, false);
+    buildServer({ current: mockPool }, false);
     const { config } = getTool("run_query");
     expect(config.description).not.toContain("READ ONLY");
     expect(config.description).toContain("Execute a SQL query");
   });
 
   it("list_schemas description", () => {
-    buildServer(mockPool, true);
+    buildServer({ current: mockPool }, true);
     const { config } = getTool("list_schemas");
     expect(config.description).toBe("List all schemas in the database.");
   });
 
   it("list_tables description contains 'List tables in a schema'", () => {
-    buildServer(mockPool, true);
+    buildServer({ current: mockPool }, true);
     const { config } = getTool("list_tables");
     expect(config.description).toContain("List tables in a schema");
   });
 
   it("describe_table description contains 'Show columns, types, and nullability'", () => {
-    buildServer(mockPool, true);
+    buildServer({ current: mockPool }, true);
     const { config } = getTool("describe_table");
     expect(config.description).toContain("Show columns, types, and nullability");
   });
 
   it("run_query handler calls runQuery(pool, sql, true)", async () => {
-    buildServer(mockPool, true);
+    buildServer({ current: mockPool }, true);
     const { handler } = getTool("run_query");
     await handler({ sql: "SELECT 1" });
     expect(runQuery).toHaveBeenCalledWith(mockPool, "SELECT 1", true, undefined);
   });
 
   it("run_query handler passes readOnly=false", async () => {
-    buildServer(mockPool, false);
+    buildServer({ current: mockPool }, false);
     const { handler } = getTool("run_query");
     await handler({ sql: "SELECT 1" });
     expect(runQuery).toHaveBeenCalledWith(mockPool, "SELECT 1", false, undefined);
   });
 
   it("run_query handler passes maxRows when provided", async () => {
-    buildServer(mockPool, true, 500);
+    buildServer({ current: mockPool }, true, 500);
     const { handler } = getTool("run_query");
     await handler({ sql: "SELECT 1" });
     expect(runQuery).toHaveBeenCalledWith(mockPool, "SELECT 1", true, 500);
   });
 
   it("list_schemas handler calls runSchemaQuery(pool)", async () => {
-    buildServer(mockPool, true);
+    buildServer({ current: mockPool }, true);
     const { handler } = getTool("list_schemas");
     await handler({});
     expect(runSchemaQuery).toHaveBeenCalledWith(mockPool);
   });
 
   it("list_tables handler calls runListTables(pool, schema)", async () => {
-    buildServer(mockPool, true);
+    buildServer({ current: mockPool }, true);
     const { handler } = getTool("list_tables");
     await handler({ schema: "public" });
     expect(runListTables).toHaveBeenCalledWith(mockPool, "public");
   });
 
   it("describe_table handler calls runDescribeTable(pool, schema, table)", async () => {
-    buildServer(mockPool, true);
+    buildServer({ current: mockPool }, true);
     const { handler } = getTool("describe_table");
     await handler({ schema: "public", table: "users" });
     expect(runDescribeTable).toHaveBeenCalledWith(mockPool, "public", "users");
