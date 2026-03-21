@@ -208,34 +208,55 @@ async function doRunQuery({
   return await withClient({ pool, runInReadOnlyTransaction, blockFn: handler });
 }
 
-async function withClient({
+/**
+ * Acquires a DB client from the pool, runs the provided function, and releases the
+ * client back to the pool.
+ *
+ * Automatically maps errors thrown while acquiring a DB client or by {@link blockFn}
+ * to {@link ToolResult}.
+ */
+async function withClient(input: {
+  pool: Pool;
+  runInReadOnlyTransaction?: boolean;
+  blockFn: (client: PoolClient) => Promise<ToolResult>;
+}): Promise<ToolResult> {
+  try {
+    return await withRawClient({
+      ...input,
+      runInReadOnlyTransaction: input.runInReadOnlyTransaction ?? true,
+    });
+  } catch (err) {
+    return buildErrorResult(err, input.pool.options);
+  }
+}
+
+/**
+ * Same as {@link withClient}, but without any automatic error mapping.
+ */
+async function withRawClient<T>({
   pool,
   runInReadOnlyTransaction = true,
   blockFn,
 }: {
   pool: Pool;
   runInReadOnlyTransaction: boolean;
-  blockFn: (client: PoolClient) => Promise<ToolResult>;
-}): Promise<ToolResult> {
+  blockFn: (client: PoolClient) => Promise<T>;
+}): Promise<T> {
+  const client = await pool.connect();
+  let startedTransaction = false;
+
   try {
-    const client = await pool.connect();
-    let startedTransaction = false;
-
-    try {
-      if (runInReadOnlyTransaction) {
-        await client.query("BEGIN TRANSACTION READ ONLY");
-        startedTransaction = true;
-      }
-
-      return await blockFn(client);
-    } finally {
-      if (startedTransaction) {
-        await client.query("ROLLBACK").catch(() => {});
-      }
-      client.release();
+    if (runInReadOnlyTransaction) {
+      await client.query("BEGIN TRANSACTION READ ONLY");
+      startedTransaction = true;
     }
-  } catch (err) {
-    return buildErrorResult(err, pool.options);
+
+    return await blockFn(client);
+  } finally {
+    if (startedTransaction) {
+      await client.query("ROLLBACK").catch(() => {});
+    }
+    client.release();
   }
 }
 
@@ -330,7 +351,6 @@ async function testDatabaseConnection(db: Pool) {
 }
 
 export function fetchDatabaseMetadataAsync(poolRef: { current: Pool }): DatabaseMetadata {
-  // Fetch database metadata asynchronously — does not block server startup
   const serverMetadata: DatabaseMetadata = { version: null, databaseSize: null };
   fetchServerMetadata(poolRef.current).then((meta) => {
     serverMetadata.version = meta.version;
