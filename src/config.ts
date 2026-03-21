@@ -3,9 +3,25 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 
+export const TOOL_NAMES = [
+  "run_query",
+  "list_schemas",
+  "list_tables",
+  "describe_table",
+] as const;
+export type ToolName = (typeof TOOL_NAMES)[number];
+
 const BooleanType = z.enum(["true", "false"]).transform((value) => value === "true");
 const NonEmptyString = z.string().min(1);
 const NonEmptyOptionalString = z.string().transform(convertEmptyToUndefined).optional();
+const CommaSeparatedList = z.string().transform((v) => {
+  const value = v
+    .replace(/ +/g, "")
+    .split(",")
+    .filter((it) => it.length > 0);
+
+  return value.length > 0 ? value : undefined;
+});
 
 function convertEmptyToUndefined<T>(value: T | null | undefined): T | undefined {
   return !value ? undefined : value;
@@ -13,6 +29,7 @@ function convertEmptyToUndefined<T>(value: T | null | undefined): T | undefined 
 
 export const EnvSchema = z
   .object({
+    ALLOWED_TOOLS: CommaSeparatedList.pipe(z.array(z.enum(TOOL_NAMES)).optional()),
     DB_HOST: NonEmptyString,
     DB_PORT: z.coerce.number().int().min(1).max(65535).default(5432),
     DB_NAME: NonEmptyString,

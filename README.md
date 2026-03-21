@@ -90,6 +90,7 @@ These are all environment variables that can be used to configure this MCP serve
 
 | Variable                       | Default  | Description                                                                      |
 |--------------------------------|----------|----------------------------------------------------------------------------------|
+| `ALLOWED_TOOLS`                | _(all)_  | Comma-separated list of tools to register. When unset, all tools are available. Case-sensitive. Example: `run_query,describe_table` |
 | `DB_PORT`                      | `5432`   | Postgres port                                                                    |
 | `DB_READ_ONLY`                 | `true`   | Set to `false` to allow write queries (`run_query` only)                         |
 | `DB_SSL`                       | `false`  | Enable TLS for the database connection                                           |

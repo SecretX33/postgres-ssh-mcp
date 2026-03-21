@@ -4,7 +4,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { Pool } from "pg";
-import { loadEnvOrExit, resolveSshConfig } from "./config.js";
+import { loadEnvOrExit, resolveSshConfig, ToolName } from "./config.js";
 import { PROJECT_INFO } from "./util.js";
 import { buildSshTunnel, setupSshTunnelListeners } from "./ssh-tunnel.js";
 import {
@@ -15,58 +15,73 @@ import {
   runSchemaQuery,
 } from "./database.js";
 
-export function buildServer(
-  poolRef: { current: Pool },
-  readOnly: boolean,
-  maxRows: number,
-): McpServer {
+export function buildServer({
+  poolRef,
+  readOnly,
+  maxRows,
+  allowedTools,
+}: {
+  poolRef: { current: Pool };
+  readOnly: boolean;
+  maxRows: number;
+  allowedTools?: ToolName[];
+}): McpServer {
   const serverInfo = {
     name: PROJECT_INFO.name,
     version: PROJECT_INFO.version,
   };
   const server = new McpServer(serverInfo);
+  const isAllowed = (name: ToolName) => !allowedTools || allowedTools.includes(name);
 
-  server.registerTool(
-    "run_query",
-    {
-      description: readOnly
-        ? "Execute a read-only SQL query against the PostgreSQL database and return the results. All queries run inside a READ ONLY transaction."
-        : "Execute a SQL query against the PostgreSQL database and return the results.",
-      inputSchema: z.object({
-        sql: z.string().describe("The SQL query to execute"),
-      }),
-    },
-    ({ sql }) => runQuery(poolRef.current, sql, readOnly, maxRows),
-  );
+  if (isAllowed("run_query")) {
+    server.registerTool(
+      "run_query",
+      {
+        description: readOnly
+          ? "Execute a read-only SQL query against the PostgreSQL database and return the results. All queries run inside a READ ONLY transaction."
+          : "Execute a SQL query against the PostgreSQL database and return the results.",
+        inputSchema: z.object({
+          sql: z.string().describe("The SQL query to execute"),
+        }),
+      },
+      ({ sql }) => runQuery(poolRef.current, sql, readOnly, maxRows),
+    );
+  }
 
-  server.registerTool(
-    "list_schemas",
-    { description: "List all schemas in the database." },
-    () => runSchemaQuery(poolRef.current),
-  );
+  if (isAllowed("list_schemas")) {
+    server.registerTool(
+      "list_schemas",
+      { description: "List all schemas in the database." },
+      () => runSchemaQuery(poolRef.current),
+    );
+  }
 
-  server.registerTool(
-    "list_tables",
-    {
-      description: "List tables in a schema (default: public).",
-      inputSchema: z.object({
-        schema: z.string().default("public").describe("Schema name"),
-      }),
-    },
-    ({ schema }) => runListTables(poolRef.current, schema),
-  );
+  if (isAllowed("list_tables")) {
+    server.registerTool(
+      "list_tables",
+      {
+        description: "List tables in a schema (default: public).",
+        inputSchema: z.object({
+          schema: z.string().default("public").describe("Schema name"),
+        }),
+      },
+      ({ schema }) => runListTables(poolRef.current, schema),
+    );
+  }
 
-  server.registerTool(
-    "describe_table",
-    {
-      description: "Show columns, types, and nullability for a table.",
-      inputSchema: z.object({
-        schema: z.string().default("public").describe("Schema name"),
-        table: z.string().describe("Table name"),
-      }),
-    },
-    ({ schema, table }) => runDescribeTable(poolRef.current, schema, table),
-  );
+  if (isAllowed("describe_table")) {
+    server.registerTool(
+      "describe_table",
+      {
+        description: "Show columns, types, and nullability for a table.",
+        inputSchema: z.object({
+          schema: z.string().default("public").describe("Schema name"),
+          table: z.string().describe("Table name"),
+        }),
+      },
+      ({ schema, table }) => runDescribeTable(poolRef.current, schema, table),
+    );
+  }
 
   return server;
 }
@@ -86,7 +101,12 @@ async function main() {
     setupSshTunnelListeners(sshTunnel, poolRef, env);
   }
 
-  const server = buildServer(poolRef, env.DB_READ_ONLY, env.DB_MAX_ROWS);
+  const server = buildServer({
+    poolRef,
+    readOnly: env.DB_READ_ONLY,
+    maxRows: env.DB_MAX_ROWS,
+    allowedTools: env.ALLOWED_TOOLS,
+  });
   const transport = new StdioServerTransport();
   await server.connect(transport);
 

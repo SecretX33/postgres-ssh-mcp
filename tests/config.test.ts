@@ -642,6 +642,94 @@ describe("EnvSchema", () => {
     });
     expect(result.DB_POOL_DRAIN_TIMEOUT_MS).toBe(5000);
   });
+
+  it("should default ALLOWED_TOOLS to undefined (all tools allowed)", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+    });
+    expect(result.ALLOWED_TOOLS).toBeUndefined();
+  });
+
+  it("should treat empty ALLOWED_TOOLS as undefined", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+      ALLOWED_TOOLS: "",
+    });
+    expect(result.ALLOWED_TOOLS).toBeUndefined();
+  });
+
+  it("should parse ALLOWED_TOOLS into an array of tool names", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+      ALLOWED_TOOLS: "run_query,describe_table",
+    });
+    expect(result.ALLOWED_TOOLS).toEqual(["run_query", "describe_table"]);
+  });
+
+  it("should accept a single tool in ALLOWED_TOOLS", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+      ALLOWED_TOOLS: "list_tables",
+    });
+    expect(result.ALLOWED_TOOLS).toEqual(["list_tables"]);
+  });
+
+  it("should strip spaces around commas in ALLOWED_TOOLS", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+      ALLOWED_TOOLS: "run_query, describe_table",
+    });
+    expect(result.ALLOWED_TOOLS).toEqual(["run_query", "describe_table"]);
+  });
+
+  it("should strip leading and trailing spaces from tool names in ALLOWED_TOOLS", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+      ALLOWED_TOOLS: " run_query , describe_table ",
+    });
+    expect(result.ALLOWED_TOOLS).toEqual(["run_query", "describe_table"]);
+  });
+
+  it("should treat whitespace-only ALLOWED_TOOLS as undefined", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+      ALLOWED_TOOLS: "   ",
+    });
+    expect(result.ALLOWED_TOOLS).toBeUndefined();
+  });
+
+  it("should reject ALLOWED_TOOLS containing an invalid tool name", () => {
+    expect(() =>
+      EnvSchema.parse({
+        DB_HOST: "x",
+        DB_NAME: "x",
+        DB_USER: "x",
+        DB_PASSWORD: "x",
+        ALLOWED_TOOLS: "run_query,invalid_tool",
+      }),
+    ).toThrow();
+  });
 });
 
 describe("parseSshConfigFile", () => {
