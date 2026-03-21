@@ -51,14 +51,11 @@ export async function runQuery(
         }
       }
 
-      const structuredContent =
-        rows.length > 0
-          ? {
-              rows,
-              rowCount: rows.length,
-              ...(truncated ? { truncated } : {}),
-            }
-          : undefined;
+      const structuredContent = {
+        rows,
+        rowCount: rows.length,
+        ...(truncated ? { truncated } : {}),
+      };
       const text =
         rows.length === 0
           ? "Query returned no rows"
@@ -87,7 +84,7 @@ export async function runExplainQuery(
     pool,
     queryFn: (client) => client.query(explainSql),
     customFormatResult: (result) => {
-      const rows = result.rows;
+      const rows = result.rows as Record<string, string>[];
       if (rows.length === 0) {
         return { text: "Query returned no rows" };
       }

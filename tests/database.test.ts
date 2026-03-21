@@ -514,7 +514,6 @@ describe("createDatabasePool – SSL CA", () => {
   });
 });
 
-
 // ---------------------------------------------------------------------------
 // runQuery – parameterized queries
 // ---------------------------------------------------------------------------
@@ -580,15 +579,14 @@ describe("runExplainQuery", () => {
     expect((result.content[0] as { text: string }).text).toBe("Seq Scan on t");
   });
 
-  it("constructs EXPLAIN with JSON format and parses output", async () => {
-    const planData = [{ Plan: { "Node Type": "Result" } }];
+  it("constructs EXPLAIN with JSON format and returns text output", async () => {
+    const planJson = '[{"Plan":{"Node Type":"Result"}}]';
     const { pool } = makePool(() =>
-      Promise.resolve(makeResult([{ "QUERY PLAN": planData }])),
+      Promise.resolve(makeResult([{ "QUERY PLAN": planJson }])),
     );
     const result = await runExplainQuery(pool, "SELECT 1", false, "json");
     expect(result.isError).toBeUndefined();
-    const parsed = JSON.parse((result.content[0] as { text: string }).text);
-    expect(parsed).toEqual(planData);
+    expect((result.content[0] as { text: string }).text).toBe(planJson);
   });
 
   it("constructs EXPLAIN with YAML format", async () => {
@@ -816,12 +814,13 @@ describe("structuredContent", () => {
     expect(result.structuredContent).toBeUndefined();
   });
 
-  it("runExplainQuery returns structuredContent with plan", async () => {
+  it("runExplainQuery returns text content with plan", async () => {
     const { pool } = makePool(() =>
       Promise.resolve(makeResult([{ "QUERY PLAN": "Seq Scan on t" }])),
     );
     const result = await runExplainQuery(pool, "SELECT 1", false, "text");
-    expect(result.structuredContent).toEqual({ plan: "Seq Scan on t" });
+    expect(result.structuredContent).toBeUndefined();
+    expect((result.content[0] as { text: string }).text).toBe("Seq Scan on t");
   });
 
   it("runExplainQuery does not return structuredContent on error", async () => {
