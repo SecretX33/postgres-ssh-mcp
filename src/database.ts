@@ -132,17 +132,16 @@ export async function runExplainQuery(
       if (rows.length === 0) {
         return { text: "Query returned no rows" };
       }
-
-      const structuredContent =
-        format === "json" ? result.rows[0]["QUERY PLAN"] : undefined;
-
-      let plan: string;
-      if (format === "json") {
-        plan = JSON.stringify(structuredContent, null, 2);
-      } else {
-        plan = result.rows.map((r) => r["QUERY PLAN"]).join("\n");
+      const plan = result.rows
+        .map((it) => it["QUERY PLAN"] as string | undefined)
+        .filter((it) => it != null)
+        .join("\n");
+      if (!plan) {
+        return {
+          text: `Query returned ${rows.length} rows, but no QUERY PLAN was found`,
+        };
       }
-      return { text: plan, structuredContent };
+      return { text: plan };
     },
   });
 }
@@ -283,7 +282,7 @@ async function withClient<T>({
       startedTransaction = true;
     }
 
-    return blockFn(client);
+    return await blockFn(client);
   } finally {
     if (startedTransaction) {
       await client.query("ROLLBACK").catch(() => {});
