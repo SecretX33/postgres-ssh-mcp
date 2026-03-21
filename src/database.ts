@@ -294,9 +294,7 @@ export async function createDatabasePool(
 }
 
 function resolveSSL(env: Env): boolean | { ca?: string; rejectUnauthorized?: boolean } {
-  // Determine whether SSL should be enabled
-  let sslEnabled = env.DB_SSL ?? !LOCALHOST_ADDRESSES.includes(env.DB_HOST);
-  if (!sslEnabled) return false;
+  if (!env.DB_SSL) return false;
 
   const sslConfig: { ca?: string; rejectUnauthorized?: boolean } = {};
   if (env.DB_SSL_CA) {

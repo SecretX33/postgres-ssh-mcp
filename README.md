@@ -104,7 +104,7 @@ These are all environment variables that can be used to configure this MCP serve
 | `ALLOWED_TOOLS`                | _(all)_  | Comma-separated list of tools to register. When unset, all tools are available. Case-sensitive. Example: `run_query,describe_table` |
 | `DB_PORT`                      | `5432`   | Postgres port                                                                    |
 | `DB_READ_ONLY`                 | `true`   | Set to `false` to allow write queries (`run_query` only)                         |
-| `DB_SSL`                       | `auto`   | Enable TLS for the database connection. When unset, auto-enables for non-localhost hosts |
+| `DB_SSL`                       | `false`  | Set to `true` to enable TLS for the database connection                          |
 | `DB_SSL_CA`                    | —        | Path to a custom CA certificate file (PEM) for SSL verification                  |
 | `DB_SSL_REJECT_UNAUTHORIZED`   | `true`   | Set to `false` to skip SSL certificate validation (insecure)                     |
 | `DB_MAX_ROWS`                  | `1000`   | Maximum rows returned per query. Uses cursor-based fetching in read-only mode    |
