@@ -589,6 +589,17 @@ describe("runExplainQuery", () => {
     expect((result.content[0] as { text: string }).text).toBe(planJson);
   });
 
+  it("serializes JSON format when pg driver returns parsed object", async () => {
+    const planData = [{ Plan: { "Node Type": "Result" } }];
+    const { pool } = makePool(() =>
+      Promise.resolve(makeResult([{ "QUERY PLAN": planData }])),
+    );
+    const result = await runExplainQuery(pool, "SELECT 1", false, "json");
+    expect(result.isError).toBeUndefined();
+    const text = (result.content[0] as { text: string }).text;
+    expect(JSON.parse(text)).toEqual(planData);
+  });
+
   it("constructs EXPLAIN with YAML format", async () => {
     const { pool, client } = makePool(() =>
       Promise.resolve(makeResult([{ "QUERY PLAN": "- Plan:" }])),

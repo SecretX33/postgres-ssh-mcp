@@ -25,22 +25,21 @@ import {
 } from "./database.js";
 
 export function buildServer({
-  poolRef,
-  readOnly,
-  maxRows,
-  allowedTools,
   env,
+  poolRef,
   sshTunnel,
   databaseMetadata,
 }: {
-  poolRef: { current: Pool };
-  readOnly: boolean;
-  maxRows: number;
-  allowedTools?: ToolName[];
   env: Env;
+  poolRef: { current: Pool };
   sshTunnel: TunnelInfo | null;
   databaseMetadata: DatabaseMetadata;
 }): McpServer {
+  const { readOnly, maxRows, allowedTools } = {
+    readOnly: env.DB_READ_ONLY,
+    maxRows: env.DB_MAX_ROWS,
+    allowedTools: env.ALLOWED_TOOLS,
+  };
   const serverInfo = {
     name: PROJECT_INFO.name,
     version: PROJECT_INFO.version,
@@ -150,11 +149,8 @@ async function main() {
   const databaseMetadata = fetchDatabaseMetadataAsync(poolRef);
 
   const server = buildServer({
-    poolRef,
-    readOnly: env.DB_READ_ONLY,
-    maxRows: env.DB_MAX_ROWS,
-    allowedTools: env.ALLOWED_TOOLS,
     env,
+    poolRef,
     sshTunnel,
     databaseMetadata,
   });

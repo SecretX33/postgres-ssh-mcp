@@ -24,7 +24,7 @@ export async function runQuery(
   maxRows: number,
   params?: (string | number | boolean | null)[],
 ): Promise<ToolResult> {
-  const validationError = await validateUserProvidedQuery(sql, readOnly);
+  const validationError = await validateUserProvidedQuery({ sql, readOnly });
   if (validationError) return validationError;
 
   return await withClient({
@@ -75,7 +75,11 @@ export async function runExplainQuery(
   readOnly: boolean,
   format: ExplainFormat,
 ): Promise<ToolResult> {
-  const validationError = await validateUserProvidedQuery(sql, readOnly);
+  const validationError = await validateUserProvidedQuery({
+    sql,
+    readOnly,
+    blockExplain: false,
+  });
   if (validationError) return validationError;
 
   const explainSql = `EXPLAIN (FORMAT ${format.toUpperCase()}) ${sql}`;
@@ -89,7 +93,10 @@ export async function runExplainQuery(
         return { text: "Query returned no rows" };
       }
       const plan = result.rows
-        .map((it) => it["QUERY PLAN"] as string | undefined)
+        .map((it) => {
+          const val = it["QUERY PLAN"];
+          return typeof val === "string" ? val : JSON.stringify(val, null, 2);
+        })
         .filter((it) => it != null)
         .join("\n");
       if (!plan) {
@@ -284,11 +291,10 @@ function buildErrorResult(error: unknown, poolOptions: PoolOptions): ToolResult 
 }
 
 async function validateUserProvidedQuery(
-  sql: string,
-  readOnly: boolean,
+  input: Parameters<typeof validateQuery>[0],
 ): Promise<ToolResult | null> {
   try {
-    await validateQuery(sql, readOnly);
+    await validateQuery(input);
   } catch (err) {
     if (err instanceof ValidationError) {
       return {

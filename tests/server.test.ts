@@ -81,15 +81,12 @@ const mockEnv = {
 } as Env;
 const mockMetadata: DatabaseMetadata = { version: null, databaseSize: null };
 
-function build(overrides?: Partial<Parameters<typeof buildServer>[0]>) {
+function build(envOverrides?: Partial<Env>) {
   return buildServer({
     poolRef: { current: mockPool },
-    readOnly: true,
-    maxRows: 1000,
-    env: mockEnv,
+    env: { ...mockEnv, ...envOverrides } as Env,
     sshTunnel: null,
     databaseMetadata: mockMetadata,
-    ...overrides,
   });
 }
 
@@ -135,7 +132,7 @@ describe("buildServer", () => {
   });
 
   it("run_query description omits 'READ ONLY' when readOnly=false", () => {
-    build({ readOnly: false });
+    build({ DB_READ_ONLY: false });
     const { config } = getTool("run_query");
     expect(config.description).not.toContain("READ ONLY");
     expect(config.description).toContain("Execute a SQL query");
@@ -167,14 +164,14 @@ describe("buildServer", () => {
   });
 
   it("run_query handler passes readOnly=false", async () => {
-    build({ readOnly: false });
+    build({ DB_READ_ONLY: false });
     const { handler } = getTool("run_query");
     await handler({ sql: "SELECT 1" });
     expect(runQuery).toHaveBeenCalledWith(mockPool, "SELECT 1", false, 1000, undefined);
   });
 
   it("run_query handler passes maxRows when provided", async () => {
-    build({ maxRows: 500 });
+    build({ DB_MAX_ROWS: 500 });
     const { handler } = getTool("run_query");
     await handler({ sql: "SELECT 1" });
     expect(runQuery).toHaveBeenCalledWith(mockPool, "SELECT 1", true, 500, undefined);
@@ -234,14 +231,14 @@ describe("buildServer", () => {
     });
 
     it("registers only the specified single tool", () => {
-      build({ allowedTools: ["run_query"] });
+      build({ ALLOWED_TOOLS: ["run_query"] });
       expect(registerToolSpy.mock.calls.length).toBe(1);
       const names = registerToolSpy.mock.calls.map((c: any) => c[0]);
       expect(names).toEqual(["run_query"]);
     });
 
     it("registers only the specified subset of tools", () => {
-      build({ allowedTools: ["list_schemas", "list_tables"] });
+      build({ ALLOWED_TOOLS: ["list_schemas", "list_tables"] });
       expect(registerToolSpy.mock.calls.length).toBe(2);
       const names = registerToolSpy.mock.calls.map((c: any) => c[0]);
       expect(names).toEqual(["list_schemas", "list_tables"]);
@@ -249,7 +246,7 @@ describe("buildServer", () => {
 
     it("registers all 6 tools when all are explicitly listed", () => {
       build({
-        allowedTools: [
+        ALLOWED_TOOLS: [
           "run_query",
           "explain_query",
           "list_schemas",
@@ -262,12 +259,12 @@ describe("buildServer", () => {
     });
 
     it("registers zero tools when allowedTools is an empty array", () => {
-      build({ allowedTools: [] });
+      build({ ALLOWED_TOOLS: [] });
       expect(registerToolSpy.mock.calls.length).toBe(0);
     });
 
     it("filters get_connection_status when not in allowedTools", () => {
-      build({ allowedTools: ["run_query", "list_schemas"] });
+      build({ ALLOWED_TOOLS: ["run_query", "list_schemas"] });
       const names = registerToolSpy.mock.calls.map((c: any) => c[0]);
       expect(names).not.toContain("get_connection_status");
     });
@@ -277,8 +274,6 @@ describe("buildServer", () => {
     const poolRef = { current: mockPool };
     buildServer({
       poolRef,
-      readOnly: true,
-      maxRows: 1000,
       env: mockEnv,
       sshTunnel: null,
       databaseMetadata: mockMetadata,
