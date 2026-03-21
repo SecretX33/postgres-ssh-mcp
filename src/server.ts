@@ -18,7 +18,7 @@ import {
 export function buildServer(
   poolRef: { current: Pool },
   readOnly: boolean,
-  maxRows?: number,
+  maxRows: number,
 ): McpServer {
   const serverInfo = {
     name: PROJECT_INFO.name,

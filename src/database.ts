@@ -11,7 +11,7 @@ export async function runQuery(
   pool: Pool,
   sql: string,
   readOnly: boolean,
-  maxRows?: number,
+  maxRows: number,
 ): Promise<ToolResult> {
   try {
     await validateQuery(sql, readOnly);
@@ -37,8 +37,8 @@ export async function runQuery(
     let rows: Record<string, unknown>[];
     let truncated = false;
 
-    if (readOnly && maxRows !== undefined) {
-      const cursorName = `mcp_cursor_${Date.now()}`;
+    if (readOnly) {
+      const cursorName = `mcp_cursor_${crypto.randomUUID().replace(/-/g, "")}`;
       await client.query(`DECLARE ${cursorName} CURSOR FOR ${sql}`);
       const result = await client.query(`FETCH ${maxRows + 1} FROM ${cursorName}`);
       truncated = result.rows.length > maxRows;
@@ -46,7 +46,7 @@ export async function runQuery(
       await client.query(`CLOSE ${cursorName}`);
     } else {
       const result = await client.query(sql);
-      if (maxRows !== undefined && result.rows.length > maxRows) {
+      if (result.rows.length > maxRows) {
         truncated = true;
         rows = result.rows.slice(0, maxRows);
       } else {
