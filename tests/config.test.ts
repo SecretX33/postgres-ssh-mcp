@@ -633,14 +633,14 @@ describe("EnvSchema", () => {
     expect(result.SSH_MAX_RECONNECT_ATTEMPTS).toBe(-1);
   });
 
-  it("should default POOL_DRAIN_TIMEOUT_MS to 5000", () => {
+  it("should default DB_POOL_DRAIN_TIMEOUT_MS to 5000", () => {
     const result = EnvSchema.parse({
       DB_HOST: "x",
       DB_NAME: "x",
       DB_USER: "x",
       DB_PASSWORD: "x",
     });
-    expect(result.POOL_DRAIN_TIMEOUT_MS).toBe(5000);
+    expect(result.DB_POOL_DRAIN_TIMEOUT_MS).toBe(5000);
   });
 });
 

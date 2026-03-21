@@ -26,9 +26,10 @@ export const EnvSchema = z
     DB_MAX_ROWS: z.coerce.number().int().min(1).default(1000),
     DB_SSL_CA: NonEmptyOptionalString,
     DB_SSL_REJECT_UNAUTHORIZED: BooleanType.default(true),
+    DB_POOL_DRAIN_TIMEOUT_MS: z.coerce.number().int().min(0).default(5000),
     // Mode 1: SSH config file alias
-    SSH_HOST: NonEmptyOptionalString,
     // Mode 2: explicit SSH connection
+    SSH_HOST: NonEmptyOptionalString,
     SSH_HOSTNAME: NonEmptyOptionalString,
     SSH_USER: NonEmptyOptionalString,
     SSH_PORT: z.coerce.number().int().min(1).max(65535).optional(),
@@ -41,7 +42,6 @@ export const EnvSchema = z
     SSH_TRUST_ON_FIRST_USE: BooleanType.default(true),
     SSH_KNOWN_HOSTS_PATH: NonEmptyOptionalString,
     SSH_MAX_RECONNECT_ATTEMPTS: z.coerce.number().int().min(-1).default(5),
-    POOL_DRAIN_TIMEOUT_MS: z.coerce.number().int().min(0).default(5000),
   })
   .superRefine((data, ctx) => {
     const hasHost = data.SSH_HOST !== undefined;

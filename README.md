@@ -99,6 +99,7 @@ These are all environment variables that can be used to configure this MCP serve
 | `DB_CONNECTION_POOL_SIZE`      | `5`      | Maximum number of connections in the pool                                        |
 | `DB_CONNECTION_TIMEOUT_MS`     | `10000`  | Milliseconds to wait for a connection from the pool                              |
 | `DB_QUERY_TIMEOUT_SECONDS`     | `15`     | How many seconds before a query is forcibly cancelled                            |
+| `DB_POOL_DRAIN_TIMEOUT_MS`     | `5000`   | Milliseconds to wait for old pool to drain during reconnection (0 to never wait) |
 | `SSH_HOST`                     | —        | SSH config alias (reads `~/.ssh/config`)                                         |
 | `SSH_HOSTNAME`                 | —        | Bastion hostname or IP                                                           |
 | `SSH_USER`                     | —        | SSH login user                                                                   |
@@ -112,7 +113,6 @@ These are all environment variables that can be used to configure this MCP serve
 | `SSH_TRUST_ON_FIRST_USE`       | `true`   | Auto-accept and save unknown SSH host keys on first connection                   |
 | `SSH_KNOWN_HOSTS_PATH`         | —        | Path to custom known_hosts file (default: `~/.ssh/known_hosts`)                  |
 | `SSH_MAX_RECONNECT_ATTEMPTS`   | `5`      | Max SSH reconnection attempts (-1 for unlimited, 0 to disable)                   |
-| `POOL_DRAIN_TIMEOUT_MS`        | `5000`   | Milliseconds to wait for old pool to drain during reconnection (0 to never wait) |
 
 ## Development
 

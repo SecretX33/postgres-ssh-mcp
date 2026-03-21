@@ -220,12 +220,12 @@ export function setupSshTunnelListeners(
         new Promise((_, reject) =>
           setTimeout(
             () => reject(new Error("Pool drain timeout")),
-            env.POOL_DRAIN_TIMEOUT_MS,
+            env.DB_POOL_DRAIN_TIMEOUT_MS,
           ),
         ),
       ]);
     } catch {
-      if (env.POOL_DRAIN_TIMEOUT_MS > 0) {
+      if (env.DB_POOL_DRAIN_TIMEOUT_MS > 0) {
         console.error("[DB] Pool drain timeout, forcing close");
       }
       oldPool.end().catch(() => {});

@@ -47,7 +47,7 @@ const baseEnv: Env = {
   SSH_TRUST_ON_FIRST_USE: true,
   SSH_KNOWN_HOSTS_PATH: undefined,
   SSH_MAX_RECONNECT_ATTEMPTS: 5,
-  POOL_DRAIN_TIMEOUT_MS: 5000,
+  DB_POOL_DRAIN_TIMEOUT_MS: 5000,
 };
 
 const baseSshConfig: SshHostConfig = {
