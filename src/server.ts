@@ -6,7 +6,7 @@ import { z } from "zod";
 import { Pool } from "pg";
 import { loadEnvOrExit, resolveSshConfig } from "./config.js";
 import { PROJECT_INFO } from "./util.js";
-import { buildSshTunnel } from "./ssh-tunnel.js";
+import { setupSshTunnelListeners, buildSshTunnel } from "./ssh-tunnel.js";
 import {
   createDatabasePool,
   runDescribeTable,
@@ -82,46 +82,15 @@ async function main() {
 
   const sshTunnel = await buildSshTunnel(env, sshConfig);
   const poolRef = { current: await createDatabasePool(env, sshTunnel) };
+  if (sshTunnel) {
+    setupSshTunnelListeners(sshTunnel, poolRef, env);
+  }
 
   const server = buildServer(poolRef, env.DB_READ_ONLY, env.DB_MAX_ROWS);
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
   console.error(`Postgres SSH MCP server version ${PROJECT_INFO.version} ready`);
-
-  if (sshTunnel) {
-    sshTunnel.on("reconnected", async ({ oldPort, newPort }) => {
-      console.error(`[SSH] Tunnel reconnected: port ${oldPort} → ${newPort}`);
-      const oldPool = poolRef.current;
-
-      poolRef.current = await createDatabasePool(env, {
-        ...sshTunnel,
-        localPort: newPort,
-      });
-
-      try {
-        await Promise.race([
-          oldPool.end(),
-          new Promise((_, reject) =>
-            setTimeout(
-              () => reject(new Error("Pool drain timeout")),
-              env.POOL_DRAIN_TIMEOUT_MS,
-            ),
-          ),
-        ]);
-      } catch {
-        if (env.POOL_DRAIN_TIMEOUT_MS > 0) {
-          console.error("[DB] Pool drain timeout, forcing close");
-        }
-        oldPool.end().catch(() => {});
-      }
-    });
-
-    sshTunnel.on("failed", (error) => {
-      console.error(`[SSH] Tunnel reconnection failed permanently: ${error.message}`);
-      process.exit(1);
-    });
-  }
 
   const cleanup = async () => {
     console.error("Shutting down...");

@@ -11,6 +11,8 @@ import * as path from "node:path";
 import * as os from "node:os";
 import { EventEmitter } from "node:events";
 import { HostKeyVerifier } from "./host-key-verifier.js";
+import { createDatabasePool } from "./database";
+import type { Pool } from "pg";
 
 export interface TunnelEvents {
   reconnected: [{ oldPort: number; newPort: number }];
@@ -196,4 +198,42 @@ function buildSshOptions(env: Env, sshConfig: SshHostConfig): SshOptions {
   }
 
   return sshOptions;
+}
+
+export function setupSshTunnelListeners(
+  sshTunnel: TunnelInfo,
+  poolRef: { current: Pool },
+  env: Env,
+) {
+  sshTunnel.on("reconnected", async ({ oldPort, newPort }) => {
+    console.error(`[SSH] Tunnel reconnected: port ${oldPort} → ${newPort}`);
+    const oldPool = poolRef.current;
+
+    poolRef.current = await createDatabasePool(env, {
+      ...sshTunnel,
+      localPort: newPort,
+    });
+
+    try {
+      await Promise.race([
+        oldPool.end(),
+        new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error("Pool drain timeout")),
+            env.POOL_DRAIN_TIMEOUT_MS,
+          ),
+        ),
+      ]);
+    } catch {
+      if (env.POOL_DRAIN_TIMEOUT_MS > 0) {
+        console.error("[DB] Pool drain timeout, forcing close");
+      }
+      oldPool.end().catch(() => {});
+    }
+  });
+
+  sshTunnel.on("failed", (error) => {
+    console.error(`[SSH] Tunnel reconnection failed permanently: ${error.message}`);
+    process.exit(1);
+  });
 }
