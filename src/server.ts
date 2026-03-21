@@ -14,8 +14,7 @@ import {
 import {
   createDatabasePool,
   type DatabaseMetadata,
-  EXPLAIN_FORMATS,
-  type ExplainFormat,
+  EXPLAIN_FORMAT_SCHEMA,
   fetchDatabaseMetadataAsync,
   getConnectionStatus,
   runDescribeTable,
@@ -64,7 +63,7 @@ export function buildServer({
             .optional(),
         }),
       },
-      (input) => runQuery(poolRef.current, input.sql, readOnly, maxRows, input.params),
+      ({ sql, params }) => runQuery(poolRef.current, sql, readOnly, maxRows, params),
     );
   }
 
@@ -76,14 +75,12 @@ export function buildServer({
           "Get the execution plan for a SQL query. Returns the EXPLAIN output in the specified format.",
         inputSchema: z.object({
           sql: z.string().describe("The SQL query to explain"),
-          format: z
-            .enum(EXPLAIN_FORMATS)
-            .default("text")
-            .describe("Output format for the execution plan"),
+          format: EXPLAIN_FORMAT_SCHEMA.default("text").describe(
+            "Output format for the execution plan",
+          ),
         }),
       },
-      ({ sql, format }) =>
-        runExplainQuery(poolRef.current, sql, readOnly, format as ExplainFormat),
+      ({ sql, format }) => runExplainQuery(poolRef.current, sql, readOnly, format),
     );
   }
 

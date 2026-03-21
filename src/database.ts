@@ -4,18 +4,18 @@ import type { TunnelInfo } from "./ssh-tunnel.js";
 import type { Env } from "./config.js";
 import type { ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { validateQuery, ValidationError } from "./sql-validator.js";
+import { z } from "zod";
 
 export type ToolResult = Awaited<ReturnType<ToolCallback>>;
 
 export const EXPLAIN_FORMATS = ["text", "json", "yaml", "xml"] as const;
-export type ExplainFormat = (typeof EXPLAIN_FORMATS)[number];
+export const EXPLAIN_FORMAT_SCHEMA = z.enum(EXPLAIN_FORMATS);
+export type ExplainFormat = z.infer<typeof EXPLAIN_FORMAT_SCHEMA>;
 
 export interface DatabaseMetadata {
   version: string | null;
   databaseSize: string | null;
 }
-
-const LOCALHOST_ADDRESSES = ["localhost", "127.0.0.1", "::1"];
 
 export async function runQuery(
   pool: Pool,
@@ -36,76 +36,72 @@ export async function runQuery(
     throw err;
   }
 
-  const client = await pool.connect();
-  let startedTransaction = false;
+  return await withClient({
+    pool,
+    runInReadOnlyTransaction: readOnly,
+    blockFn: async (client) => {
+      try {
+        let rows: Record<string, unknown>[];
+        let truncated = false;
 
-  try {
-    if (readOnly) {
-      await client.query("BEGIN TRANSACTION READ ONLY");
-      startedTransaction = true;
-    }
+        if (readOnly) {
+          const cursorName = `mcp_cursor_${crypto.randomUUID().replace(/-/g, "")}`;
+          await client.query(`DECLARE ${cursorName} CURSOR FOR ${sql}`, params);
+          const result = await client.query(`FETCH ${maxRows + 1} FROM ${cursorName}`);
+          truncated = result.rows.length > maxRows;
+          rows = truncated ? result.rows.slice(0, maxRows) : result.rows;
+          await client.query(`CLOSE ${cursorName}`);
+        } else {
+          const result = await client.query(sql, params);
+          if (result.rows.length > maxRows) {
+            truncated = true;
+            rows = result.rows.slice(0, maxRows);
+          } else {
+            rows = result.rows;
+          }
+        }
 
-    let rows: Record<string, unknown>[];
-    let truncated = false;
+        const structuredContent =
+          rows.length > 0
+            ? {
+                rows,
+                rowCount: rows.length,
+                ...(truncated ? { truncated } : {}),
+              }
+            : undefined;
+        const text =
+          rows.length === 0
+            ? "Query returned no rows"
+            : JSON.stringify(structuredContent, null, 2);
 
-    if (readOnly) {
-      const cursorName = `mcp_cursor_${crypto.randomUUID().replace(/-/g, "")}`;
-      await client.query(`DECLARE ${cursorName} CURSOR FOR ${sql}`, params);
-      const result = await client.query(`FETCH ${maxRows + 1} FROM ${cursorName}`);
-      truncated = result.rows.length > maxRows;
-      rows = truncated ? result.rows.slice(0, maxRows) : result.rows;
-      await client.query(`CLOSE ${cursorName}`);
-    } else {
-      const result = await client.query(sql, params);
-      if (result.rows.length > maxRows) {
-        truncated = true;
-        rows = result.rows.slice(0, maxRows);
-      } else {
-        rows = result.rows;
+        return {
+          content: [{ type: "text", text }],
+          structuredContent,
+        };
+      } catch (err) {
+        if (err instanceof Error && err.message === "Query read timeout") {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Query timed out. The query exceeded the configured time limit (${pool.options.query_timeout}s). Try simplifying the query or increasing DB_QUERY_TIMEOUT_SECONDS.`,
+              },
+            ],
+            isError: true,
+          };
+        }
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error: ${err instanceof Error ? err.message : String(err)}`,
+            },
+          ],
+          isError: true,
+        };
       }
-    }
-
-    const structuredContent = {
-      rows,
-      rowCount: rows.length,
-      ...(truncated ? { truncated } : {}),
-    };
-    const text =
-      rows.length === 0
-        ? "Query returned no rows"
-        : JSON.stringify(structuredContent, null, 2);
-
-    return {
-      content: [{ type: "text", text }],
-      structuredContent,
-    };
-  } catch (err) {
-    if (err instanceof Error && err.message === "Query read timeout") {
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Query timed out. The query exceeded the configured time limit (${pool.options.query_timeout}s). Try simplifying the query or increasing DB_QUERY_TIMEOUT_SECONDS.`,
-          },
-        ],
-        isError: true,
-      };
-    }
-    return {
-      content: [
-        {
-          type: "text",
-          text: `Error: ${err instanceof Error ? err.message : String(err)}`,
-        },
-      ],
-      isError: true,
-    };
-  } finally {
-    if (startedTransaction) {
-      await client.query("ROLLBACK").catch(() => {});
-    }
-    client.release();
-  }
+    },
+  });
 }
 
 export async function runExplainQuery(
@@ -128,41 +124,50 @@ export async function runExplainQuery(
 
   const explainSql = `EXPLAIN (FORMAT ${format.toUpperCase()}) ${sql}`;
 
-  return runUnsafeQuery(
+  return doRunQuery({
     pool,
-    (client) => client.query(explainSql),
-    (result) => {
+    queryFn: (client) => client.query(explainSql),
+    customFormatResult: (result) => {
       const rows = result.rows;
       if (rows.length === 0) {
-        return { text: "Query returned no rows", structuredContent: { plan: "" } };
+        return { text: "Query returned no rows" };
       }
+
+      const structuredContent =
+        format === "json" ? result.rows[0]["QUERY PLAN"] : undefined;
 
       let plan: string;
       if (format === "json") {
-        plan = JSON.stringify(result.rows[0]?.["QUERY PLAN"], null, 2);
+        plan = JSON.stringify(structuredContent, null, 2);
       } else {
         plan = result.rows.map((r) => r["QUERY PLAN"]).join("\n");
       }
-      return { text: plan, structuredContent: { plan } };
+      return { text: plan, structuredContent };
     },
-  );
+  });
 }
 
 export function runSchemaQuery(pool: Pool): Promise<ToolResult> {
-  return runUnsafeQuery(pool, (client) =>
-    client.query(
-      "SELECT schema_name FROM information_schema.schemata ORDER BY schema_name",
-    ),
-  );
+  return doRunQuery({
+    pool,
+    queryFn: (client) =>
+      client.query(
+        "SELECT schema_name FROM information_schema.schemata ORDER BY schema_name",
+      ),
+    runInReadOnlyTransaction: false, // SAFE: list schemas does not modify data
+  });
 }
 
 export async function runListTables(pool: Pool, schema: string): Promise<ToolResult> {
-  return runUnsafeQuery(pool, (client) =>
-    client.query(
-      "SELECT table_name FROM information_schema.tables WHERE table_schema = $1 ORDER BY table_name",
-      [schema],
-    ),
-  );
+  return doRunQuery({
+    pool,
+    queryFn: (client) =>
+      client.query(
+        "SELECT table_name FROM information_schema.tables WHERE table_schema = $1 ORDER BY table_name",
+        [schema],
+      ),
+    runInReadOnlyTransaction: false, // SAFE: list tables does not modify data, and 'schema' param is taken as a safe query param
+  });
 }
 
 export async function runDescribeTable(
@@ -170,12 +175,15 @@ export async function runDescribeTable(
   schema: string,
   table: string,
 ): Promise<ToolResult> {
-  return runUnsafeQuery(pool, (client) =>
-    client.query(
-      "SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema = $1 AND table_name = $2 ORDER BY ordinal_position",
-      [schema, table],
-    ),
-  );
+  return doRunQuery({
+    pool,
+    queryFn: (client) =>
+      client.query(
+        "SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema = $1 AND table_name = $2 ORDER BY ordinal_position",
+        [schema, table],
+      ),
+    runInReadOnlyTransaction: false, // SAFE: describe table does not modify data, and 'schema' and 'table' params are taken as safe query params
+  });
 }
 
 export function getConnectionStatus(
@@ -212,58 +220,74 @@ export function getConnectionStatus(
   };
 }
 
-export async function fetchServerMetadata(pool: Pool): Promise<DatabaseMetadata> {
-  const metadata: DatabaseMetadata = { version: null, databaseSize: null };
-
-  try {
-    const [versionResult, sizeResult] = await Promise.all([
-      pool.query("SELECT version()"),
-      pool.query("SELECT pg_size_pretty(pg_database_size(current_database())) AS size"),
-    ]);
-    metadata.version = versionResult.rows[0]?.version ?? null;
-    metadata.databaseSize = sizeResult.rows[0]?.size ?? null;
-  } catch {
-    // Non-critical — metadata will remain null
-  }
-
-  return metadata;
-}
-
-async function runUnsafeQuery(
-  pool: Pool,
-  queryFn: (client: PoolClient) => Promise<QueryResult>,
-  formatResult?: (result: QueryResult) => {
+async function doRunQuery({
+  pool,
+  runInReadOnlyTransaction = true,
+  queryFn,
+  customFormatResult,
+}: {
+  pool: Pool;
+  runInReadOnlyTransaction?: boolean;
+  queryFn: (client: PoolClient) => Promise<QueryResult>;
+  customFormatResult?: (result: QueryResult) => {
     text: string;
-    structuredContent: Record<string, unknown>;
-  },
-): Promise<ToolResult> {
-  const client = await pool.connect();
-  try {
-    const result = await queryFn(client);
+    structuredContent?: Record<string, unknown>;
+  };
+}): Promise<ToolResult> {
+  const handler = async (client: PoolClient): Promise<ToolResult> => {
+    try {
+      const result = await queryFn(client);
 
-    if (formatResult) {
-      const { text, structuredContent } = formatResult(result);
+      if (customFormatResult) {
+        const { text, structuredContent } = customFormatResult(result);
+        return {
+          content: [{ type: "text", text }],
+          structuredContent,
+        };
+      }
+
       return {
-        content: [{ type: "text", text }],
-        structuredContent,
+        content: [{ type: "text", text: JSON.stringify(result.rows, null, 2) }],
+        structuredContent: { rows: result.rows },
+      };
+    } catch (err) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error: ${err instanceof Error ? err.message : String(err)}`,
+          },
+        ],
+        isError: true,
       };
     }
+  };
+  return await withClient({ pool, runInReadOnlyTransaction, blockFn: handler });
+}
 
-    return {
-      content: [{ type: "text", text: JSON.stringify(result.rows, null, 2) }],
-      structuredContent: { rows: result.rows },
-    };
-  } catch (err) {
-    return {
-      content: [
-        {
-          type: "text",
-          text: `Error: ${err instanceof Error ? err.message : String(err)}`,
-        },
-      ],
-      isError: true,
-    };
+async function withClient<T>({
+  pool,
+  runInReadOnlyTransaction = true,
+  blockFn,
+}: {
+  pool: Pool;
+  runInReadOnlyTransaction: boolean;
+  blockFn: (client: PoolClient) => Promise<T>;
+}): Promise<T> {
+  const client = await pool.connect();
+  let startedTransaction = false;
+
+  try {
+    if (runInReadOnlyTransaction) {
+      await client.query("BEGIN TRANSACTION READ ONLY");
+      startedTransaction = true;
+    }
+
+    return blockFn(client);
   } finally {
+    if (startedTransaction) {
+      await client.query("ROLLBACK").catch(() => {});
+    }
     client.release();
   }
 }
@@ -326,4 +350,21 @@ export function fetchDatabaseMetadataAsync(poolRef: { current: Pool }): Database
     serverMetadata.databaseSize = meta.databaseSize;
   });
   return serverMetadata;
+}
+
+export async function fetchServerMetadata(pool: Pool): Promise<DatabaseMetadata> {
+  const metadata: DatabaseMetadata = { version: null, databaseSize: null };
+
+  try {
+    const [versionResult, sizeResult] = await Promise.all([
+      pool.query("SELECT version()"),
+      pool.query("SELECT pg_size_pretty(pg_database_size(current_database())) AS size"),
+    ]);
+    metadata.version = versionResult.rows[0]?.version ?? null;
+    metadata.databaseSize = sizeResult.rows[0]?.size ?? null;
+  } catch {
+    // Non-critical — metadata will remain null
+  }
+
+  return metadata;
 }
