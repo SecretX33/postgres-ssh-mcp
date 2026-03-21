@@ -7,6 +7,11 @@ on:
         description: 'Version to release (e.g. 1.2.3 or v1.2.3). Leave empty to auto-increment patch from latest tag.'
         required: false
         type: string
+      dry_run:
+        description: 'If true, runs npm publish --dry-run (no actual publish).'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -15,7 +20,7 @@ permissions:
 jobs:
   release:
     if: github.repository == 'SecretX33/postgres-ssh-mcp'
-    uses: ./.github/workflows/release.yml
+    uses: ./.github/workflows/build-and-release.yml
     with:
       version: ${{ inputs.version }}
 
@@ -25,5 +30,6 @@ jobs:
     uses: ./.github/workflows/publish.yml
     with:
       tag: ${{ needs.release.outputs.tag }}
+      dry_run: ${{ inputs.dry_run }}
     secrets:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

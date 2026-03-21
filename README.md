@@ -66,12 +66,23 @@ claude mcp add --transport stdio postgres-ssh-mcp \
 
 ## Tools
 
-| Tool             | Description                                                    |
-|------------------|----------------------------------------------------------------|
-| `run_query`      | Execute a SQL query (read-only by default; see `DB_READ_ONLY`) |
-| `list_schemas`   | List all schemas in the database                               |
-| `list_tables`    | List tables in a schema (default: `public`)                    |
-| `describe_table` | Show columns, types, and nullability for a table               |
+| Tool                    | Description                                                              |
+|-------------------------|--------------------------------------------------------------------------|
+| `run_query`             | Execute a SQL query (read-only by default; see `DB_READ_ONLY`). Supports parameterized queries with `$1, $2, ...` placeholders |
+| `explain_query`         | Get the execution plan for a SQL query (supports text, JSON, YAML, XML formats) |
+| `list_schemas`          | List all schemas in the database                                         |
+| `list_tables`           | List tables in a schema (default: `public`)                              |
+| `describe_table`        | Show columns, types, and nullability for a table                         |
+| `get_connection_status` | Show connection pool stats, database version, size, and server configuration |
+
+## Query Safety
+
+When `DB_READ_ONLY=true` (the default), queries go through multiple safety layers:
+
+1. **AST-level SQL validation** using `pgsql-parser` and `@pgsql/traverse` — parses SQL into an abstract syntax tree and walks it to detect mutations, including hidden ones in CTEs, `SELECT INTO`, and locking clauses. Only `SELECT` and `EXPLAIN` statements are allowed.
+2. **Dangerous function denylist** — blocks 250+ PostgreSQL functions that can cause side effects even inside read-only transactions, including `pg_sleep`, `nextval`, `pg_notify`, file I/O functions, advisory locks, and replication controls.
+3. **Read-only transaction wrapping** — all queries execute inside `BEGIN TRANSACTION READ ONLY` with automatic `ROLLBACK`.
+4. **Single-statement enforcement** — multi-statement queries are rejected before execution.
 
 ## Environment Variables
 
@@ -88,18 +99,32 @@ These are all environment variables that can be used to configure this MCP serve
 
 ### Optional
 
-| Variable                       | Default | Description                                              |
-|--------------------------------|---------|----------------------------------------------------------|
-| `DB_PORT`                      | `5432`  | Postgres port                                            |
-| `DB_READ_ONLY`                 | `true`  | Set to `false` to allow write queries (`run_query` only) |
-| `DB_SSL`                       | `false` | Enable TLS for the database connection                   |
-| `SSH_HOST`                     | —       | SSH config alias (reads `~/.ssh/config`)                 |
-| `SSH_HOSTNAME`                 | —       | Bastion hostname or IP                                   |
-| `SSH_USER`                     | —       | SSH login user                                           |
-| `SSH_PORT`                     | `22`    | SSH port                                                 |
-| `SSH_STRICT_HOST_KEY_CHECKING` | `true`  | Enables or disables strict host checking                 |
-| `SSH_IDENTITY_FILE`            | —       | Absolute path or `~/...` to private key file             |
-| `SSH_KEY_PASSPHRASE`           | —       | Passphrase for an encrypted private key                  |
+| Variable                       | Default  | Description                                                                      |
+|--------------------------------|----------|----------------------------------------------------------------------------------|
+| `ALLOWED_TOOLS`                | _(all)_  | Comma-separated list of tools to register. When unset, all tools are available. Case-sensitive. Example: `run_query,describe_table` |
+| `DB_PORT`                      | `5432`   | Postgres port                                                                    |
+| `DB_READ_ONLY`                 | `true`   | Set to `false` to allow write queries (`run_query` only)                         |
+| `DB_SSL`                       | `false`  | Set to `true` to enable TLS for the database connection                          |
+| `DB_SSL_CA`                    | —        | Path to a custom CA certificate file (PEM) for SSL verification                  |
+| `DB_SSL_REJECT_UNAUTHORIZED`   | `true`   | Set to `false` to skip SSL certificate validation (insecure)                     |
+| `DB_MAX_ROWS`                  | `1000`   | Maximum rows returned per query. Uses cursor-based fetching in read-only mode    |
+| `DB_CONNECTION_POOL_SIZE`      | `5`      | Maximum number of connections in the pool                                        |
+| `DB_CONNECTION_TIMEOUT_MS`     | `10000`  | Milliseconds to wait for a connection from the pool                              |
+| `DB_QUERY_TIMEOUT_MS`          | `15000`  | Milliseconds before a query is forcibly cancelled                                |
+| `DB_POOL_DRAIN_TIMEOUT_MS`     | `5000`   | Milliseconds to wait for old pool to drain during reconnection (0 to never wait) |
+| `SSH_HOST`                     | —        | SSH config alias (reads `~/.ssh/config`)                                         |
+| `SSH_HOSTNAME`                 | —        | Bastion hostname or IP                                                           |
+| `SSH_USER`                     | —        | SSH login user                                                                   |
+| `SSH_PORT`                     | `22`     | SSH port                                                                         |
+| `SSH_STRICT_HOST_KEY_CHECKING` | `true`   | Enables or disables strict host checking                                         |
+| `SSH_IDENTITY_FILE`            | —        | Absolute path or `~/...` to private key file                                     |
+| `SSH_KEY_PASSPHRASE`           | —        | Passphrase for an encrypted private key                                          |
+| `SSH_PASSWORD`                 | —        | SSH password (alternative to key-based auth)                                     |
+| `SSH_KEEPALIVE_INTERVAL_MS`    | disabled | Milliseconds between SSH keepalive probes (if set: minimum 1000)                 |
+| `SSH_KEEPALIVE_COUNT_MAX`      | `3`      | Max unanswered keepalive probes before dropping the connection                   |
+| `SSH_TRUST_ON_FIRST_USE`       | `true`   | Auto-accept and save unknown SSH host keys on first connection                   |
+| `SSH_KNOWN_HOSTS_PATH`         | —        | Path to custom known_hosts file (default: `~/.ssh/known_hosts`)                  |
+| `SSH_MAX_RECONNECT_ATTEMPTS`   | `5`      | Max SSH reconnection attempts (-1 for unlimited, 0 to disable)                   |
 
 ## Development
 

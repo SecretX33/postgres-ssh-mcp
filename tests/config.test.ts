@@ -470,6 +470,339 @@ describe("EnvSchema", () => {
     });
     expect(result.SSH_KEY_PASSPHRASE).toBe("secret");
   });
+
+  it("should default DB_MAX_ROWS to 1000", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+    });
+    expect(result.DB_MAX_ROWS).toBe(1000);
+  });
+
+  it("should accept custom DB_MAX_ROWS", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+      DB_MAX_ROWS: "500",
+    });
+    expect(result.DB_MAX_ROWS).toBe(500);
+  });
+
+  it("should reject DB_MAX_ROWS below 1", () => {
+    expect(() =>
+      EnvSchema.parse({
+        DB_HOST: "x",
+        DB_NAME: "x",
+        DB_USER: "x",
+        DB_PASSWORD: "x",
+        DB_MAX_ROWS: "0",
+      }),
+    ).toThrow();
+  });
+
+  it("should accept DB_SSL_CA as optional string", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+      DB_SSL_CA: "/path/to/ca.pem",
+    });
+    expect(result.DB_SSL_CA).toBe("/path/to/ca.pem");
+  });
+
+  it("should default DB_SSL_REJECT_UNAUTHORIZED to true", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+    });
+    expect(result.DB_SSL_REJECT_UNAUTHORIZED).toBe(true);
+  });
+
+  it("should accept DB_SSL_REJECT_UNAUTHORIZED as false", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+      DB_SSL_REJECT_UNAUTHORIZED: "false",
+    });
+    expect(result.DB_SSL_REJECT_UNAUTHORIZED).toBe(false);
+  });
+
+  it("should accept SSH_PASSWORD as optional string", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+      SSH_HOSTNAME: "bastion.example.com",
+      SSH_USER: "admin",
+      SSH_PASSWORD: "secret",
+    });
+    expect(result.SSH_PASSWORD).toBe("secret");
+  });
+
+  it("should default SSH_KEEPALIVE_INTERVAL_MS to undefined (disabled)", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+    });
+    expect(result.SSH_KEEPALIVE_INTERVAL_MS).toBeUndefined();
+  });
+
+  it("should accept custom SSH_KEEPALIVE_INTERVAL_MS", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+      SSH_KEEPALIVE_INTERVAL_MS: "5000",
+    });
+    expect(result.SSH_KEEPALIVE_INTERVAL_MS).toBe(5000);
+  });
+
+  it("should default SSH_KEEPALIVE_COUNT_MAX to 3", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+    });
+    expect(result.SSH_KEEPALIVE_COUNT_MAX).toBe(3);
+  });
+
+  it("should accept custom SSH_KEEPALIVE_COUNT_MAX", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+      SSH_KEEPALIVE_COUNT_MAX: "5",
+    });
+    expect(result.SSH_KEEPALIVE_COUNT_MAX).toBe(5);
+  });
+
+  it("should default SSH_TRUST_ON_FIRST_USE to true", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+    });
+    expect(result.SSH_TRUST_ON_FIRST_USE).toBe(true);
+  });
+
+  it("should accept SSH_KNOWN_HOSTS_PATH as optional string", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+      SSH_KNOWN_HOSTS_PATH: "/custom/known_hosts",
+    });
+    expect(result.SSH_KNOWN_HOSTS_PATH).toBe("/custom/known_hosts");
+  });
+
+  it("should default SSH_MAX_RECONNECT_ATTEMPTS to 5", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+    });
+    expect(result.SSH_MAX_RECONNECT_ATTEMPTS).toBe(5);
+  });
+
+  it("should accept SSH_MAX_RECONNECT_ATTEMPTS of -1 for unlimited", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+      SSH_MAX_RECONNECT_ATTEMPTS: "-1",
+    });
+    expect(result.SSH_MAX_RECONNECT_ATTEMPTS).toBe(-1);
+  });
+
+  it("should default DB_POOL_DRAIN_TIMEOUT_MS to 5000", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+    });
+    expect(result.DB_POOL_DRAIN_TIMEOUT_MS).toBe(5000);
+  });
+
+  it("should default ALLOWED_TOOLS to undefined (all tools allowed)", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+    });
+    expect(result.ALLOWED_TOOLS).toBeUndefined();
+  });
+
+  it("should treat empty ALLOWED_TOOLS as undefined", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+      ALLOWED_TOOLS: "",
+    });
+    expect(result.ALLOWED_TOOLS).toBeUndefined();
+  });
+
+  it("should parse ALLOWED_TOOLS into an array of tool names", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+      ALLOWED_TOOLS: "run_query,describe_table",
+    });
+    expect(result.ALLOWED_TOOLS).toEqual(["run_query", "describe_table"]);
+  });
+
+  it("should accept a single tool in ALLOWED_TOOLS", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+      ALLOWED_TOOLS: "list_tables",
+    });
+    expect(result.ALLOWED_TOOLS).toEqual(["list_tables"]);
+  });
+
+  it("should strip spaces around commas in ALLOWED_TOOLS", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+      ALLOWED_TOOLS: "run_query, describe_table",
+    });
+    expect(result.ALLOWED_TOOLS).toEqual(["run_query", "describe_table"]);
+  });
+
+  it("should strip leading and trailing spaces from tool names in ALLOWED_TOOLS", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+      ALLOWED_TOOLS: " run_query , describe_table ",
+    });
+    expect(result.ALLOWED_TOOLS).toEqual(["run_query", "describe_table"]);
+  });
+
+  it("should treat whitespace-only ALLOWED_TOOLS as undefined", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+      ALLOWED_TOOLS: "   ",
+    });
+    expect(result.ALLOWED_TOOLS).toBeUndefined();
+  });
+
+  it("should reject ALLOWED_TOOLS containing an invalid tool name", () => {
+    expect(() =>
+      EnvSchema.parse({
+        DB_HOST: "x",
+        DB_NAME: "x",
+        DB_USER: "x",
+        DB_PASSWORD: "x",
+        ALLOWED_TOOLS: "run_query,invalid_tool",
+      }),
+    ).toThrow();
+  });
+
+  it("should accept explain_query in ALLOWED_TOOLS", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+      ALLOWED_TOOLS: "explain_query",
+    });
+    expect(result.ALLOWED_TOOLS).toEqual(["explain_query"]);
+  });
+
+  it("should accept get_connection_status in ALLOWED_TOOLS", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+      ALLOWED_TOOLS: "get_connection_status",
+    });
+    expect(result.ALLOWED_TOOLS).toEqual(["get_connection_status"]);
+  });
+
+  it("should accept all 6 tool names in ALLOWED_TOOLS", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+      ALLOWED_TOOLS:
+        "run_query,explain_query,list_schemas,list_tables,describe_table,get_connection_status",
+    });
+    expect(result.ALLOWED_TOOLS).toEqual([
+      "run_query",
+      "explain_query",
+      "list_schemas",
+      "list_tables",
+      "describe_table",
+      "get_connection_status",
+    ]);
+  });
+
+  it("should default DB_SSL to false", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+    });
+    expect(result.DB_SSL).toBe(false);
+  });
+
+  it("should accept DB_SSL=true explicitly", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+      DB_SSL: "true",
+    });
+    expect(result.DB_SSL).toBe(true);
+  });
+
+  it("should accept DB_SSL=false explicitly", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+      DB_SSL: "false",
+    });
+    expect(result.DB_SSL).toBe(false);
+  });
 });
 
 describe("parseSshConfigFile", () => {

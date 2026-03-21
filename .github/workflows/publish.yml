@@ -1,4 +1,4 @@
-name: Publish to NPM
+name: Publish
 
 on:
   workflow_dispatch:
@@ -7,15 +7,23 @@ on:
         description: 'Git tag of the release to publish (e.g. v1.2.3 or 1.2.3).'
         required: true
         type: string
+      dry_run:
+        description: 'If true, runs npm publish --dry-run (no actual publish).'
+        required: false
+        type: boolean
+        default: false
   workflow_call:
     inputs:
       tag:
         description: 'Git tag of the release to publish (e.g. v1.2.3 or 1.2.3).'
         required: true
         type: string
-    secrets:
-      NPM_TOKEN:
-        required: true
+      dry_run:
+        description: 'If true, runs npm publish --dry-run (no actual publish).'
+        required: false
+        type: boolean
+        default: false
+
 permissions:
   contents: read
   id-token: write
@@ -43,16 +51,10 @@ jobs:
         with:
           version: ${{ inputs.tag }}
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
-        with:
-          version: 10
-
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: 22
-          registry-url: https://registry.npmjs.org
 
       - name: Download release asset
         run: gh release download "${{ steps.sanitize.outputs.tag }}" --pattern "*.tgz"
@@ -67,6 +69,7 @@ jobs:
           ls -la *.tgz 2>/dev/null || echo "No .tgz files found!"
 
       - name: Publish to NPM
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: pnpm publish postgres-ssh-mcp-${{ steps.sanitize.outputs.version }}.tgz --access public --provenance
+        run: |
+          FLAGS="--access public --provenance"
+          if [ "${{ inputs.dry_run }}" = "true" ]; then FLAGS="$FLAGS --dry-run"; fi
+          npm publish postgres-ssh-mcp-${{ steps.sanitize.outputs.version }}.tgz $FLAGS

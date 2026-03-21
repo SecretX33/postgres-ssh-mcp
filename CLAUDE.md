@@ -45,6 +45,12 @@ An MCP (Model Context Protocol) server that lets AI tools query PostgreSQL datab
 
 Unit tests go in the `tests/` directory, named `<module>.test.ts` (mirroring `src/<module>.ts`).
 
+## Tool Responses & Structured Content
+
+- **Do NOT use `outputSchema`** on tool registrations. The MCP SDK enforces that `structuredContent` is present on every non-error response when `outputSchema` is defined. Any success code path that misses it causes a hard `-32602` error. Too fragile.
+- **DO return `structuredContent`** alongside `content` in tool results when structured data is available. This lets MCP clients access typed JSON without parsing text, while remaining optional.
+- **Error responses** (`isError: true`) don't need `structuredContent` unless there's actual structured error data to return. The SDK skips output validation when `isError` is set.
+
 ## README Maintenance
 
 When adding features configurable via environment variables, update the Environment Variables section in `README.md`.

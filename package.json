@@ -34,9 +34,9 @@
     "dev": "dotenv -v NODE_ENV=development -- nodemon --watch src --watch .env --ext ts --exec \"tsc && node dist/server.js\"",
     "start": "node dist/server.js",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit",
-    "format": "prettier --check --cache src",
-    "format:write": "prettier --write --cache src"
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
+    "format": "prettier --check --cache src tests",
+    "format:write": "prettier --write --cache src tests"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.27.1",

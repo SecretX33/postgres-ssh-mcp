@@ -24,6 +24,7 @@ export class ValidationError extends Error {
  * - `FORBIDDEN_SELECT_INTO` — SELECT INTO creates a table
  * - `FORBIDDEN_LOCKING` — FOR UPDATE/SHARE locking clause
  * - `FORBIDDEN_FUNCTION` — call to a denylisted superuser / side-effect function
+ * - `FORBIDDEN_EXPLAIN_IN_QUERY` — EXPLAIN submitted via run_query instead of explain_query
  */
 export type ValidationErrorCode =
   | "EMPTY_QUERY"
@@ -35,7 +36,8 @@ export type ValidationErrorCode =
   | "FORBIDDEN_NESTED_MUTATION"
   | "FORBIDDEN_SELECT_INTO"
   | "FORBIDDEN_LOCKING"
-  | "FORBIDDEN_FUNCTION";
+  | "FORBIDDEN_FUNCTION"
+  | "FORBIDDEN_EXPLAIN_IN_QUERY";
 
 const ALLOWED_STATEMENT_TYPES = new Set(["SelectStmt", "ExplainStmt"]);
 
@@ -135,6 +137,9 @@ const DANGEROUS_FUNCTIONS = new Set([
   "pg_advisory_xact_lock_shared",
   "pg_try_advisory_xact_lock",
   "pg_try_advisory_xact_lock_shared",
+  "pg_advisory_unlock",
+  "pg_advisory_unlock_shared",
+  "pg_advisory_unlock_all",
 
   // --- Async messaging (side effect escapes transaction boundary) ---
   "pg_notify",
@@ -287,9 +292,17 @@ const DANGEROUS_FUNCTIONS = new Set([
  * privileges (e.g. `pg_read_all_data`). The parser is the application-level
  * gate; the DB role is the enforcement layer.
  */
-export async function validateQuery(sql: string, readOnly: boolean): Promise<void> {
+export async function validateQuery({
+  sql,
+  readOnly,
+  blockExplain = true,
+}: {
+  sql: string;
+  readOnly: boolean;
+  blockExplain?: boolean;
+}): Promise<void> {
   // Stage 2 pre-check — empty before parse
-  if (sql.trim() === "") {
+  if (sql.trim().length === 0) {
     throw new ValidationError("EMPTY_QUERY", "Query is empty");
   }
 
@@ -332,10 +345,16 @@ export async function validateQuery(sql: string, readOnly: boolean): Promise<voi
   }
 
   // Stage 3b — EXPLAIN inner check
+  if (stmtType === "ExplainStmt" && blockExplain) {
+    throw new ValidationError(
+      "FORBIDDEN_EXPLAIN_IN_QUERY",
+      "Use the explain_query tool for EXPLAIN statements",
+    );
+  }
   if (stmtType === "ExplainStmt") {
     const explainNode = stmtNode["ExplainStmt"] as Record<string, unknown>;
     const innerStmt = explainNode["query"] as Record<string, unknown> | undefined;
-    const innerType = innerStmt ? Object.keys(innerStmt)[0] : "";
+    const innerType = innerStmt ? Object.keys(innerStmt)[0] : undefined;
     if (innerType !== "SelectStmt") {
       throw new ValidationError(
         "FORBIDDEN_EXPLAIN_TARGET",

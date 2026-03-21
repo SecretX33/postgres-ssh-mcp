@@ -3,9 +3,27 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 
+export const TOOL_NAMES = [
+  "run_query",
+  "explain_query",
+  "list_schemas",
+  "list_tables",
+  "describe_table",
+  "get_connection_status",
+] as const;
+export type ToolName = (typeof TOOL_NAMES)[number];
+
 const BooleanType = z.enum(["true", "false"]).transform((value) => value === "true");
 const NonEmptyString = z.string().min(1);
 const NonEmptyOptionalString = z.string().transform(convertEmptyToUndefined).optional();
+const CommaSeparatedList = z.string().transform((v) => {
+  const value = v
+    .replace(/ +/g, "")
+    .split(",")
+    .filter((it) => it.length > 0);
+
+  return value.length > 0 ? value : undefined;
+});
 
 function convertEmptyToUndefined<T>(value: T | null | undefined): T | undefined {
   return !value ? undefined : value;
@@ -13,22 +31,36 @@ function convertEmptyToUndefined<T>(value: T | null | undefined): T | undefined 
 
 export const EnvSchema = z
   .object({
+    ALLOWED_TOOLS: CommaSeparatedList.pipe(z.array(z.enum(TOOL_NAMES)).optional()),
     DB_HOST: NonEmptyString,
     DB_PORT: z.coerce.number().int().min(1).max(65535).default(5432),
     DB_NAME: NonEmptyString,
     DB_USER: NonEmptyString,
     DB_PASSWORD: NonEmptyString,
+    DB_CONNECTION_POOL_SIZE: z.coerce.number().int().min(1).default(5),
+    DB_CONNECTION_TIMEOUT_MS: z.coerce.number().int().min(0).default(10000),
+    DB_QUERY_TIMEOUT_MS: z.coerce.number().int().min(0).default(15000),
     DB_READ_ONLY: BooleanType.default(true),
     DB_SSL: BooleanType.default(false),
+    DB_MAX_ROWS: z.coerce.number().int().min(1).default(1000),
+    DB_SSL_CA: NonEmptyOptionalString,
+    DB_SSL_REJECT_UNAUTHORIZED: BooleanType.default(true),
+    DB_POOL_DRAIN_TIMEOUT_MS: z.coerce.number().int().min(0).default(5000),
     // Mode 1: SSH config file alias
-    SSH_HOST: NonEmptyOptionalString,
     // Mode 2: explicit SSH connection
+    SSH_HOST: NonEmptyOptionalString,
     SSH_HOSTNAME: NonEmptyOptionalString,
     SSH_USER: NonEmptyOptionalString,
     SSH_PORT: z.coerce.number().int().min(1).max(65535).optional(),
     SSH_STRICT_HOST_KEY_CHECKING: BooleanType.default(true),
     SSH_IDENTITY_FILE: NonEmptyOptionalString,
     SSH_KEY_PASSPHRASE: NonEmptyOptionalString,
+    SSH_PASSWORD: NonEmptyOptionalString,
+    SSH_KEEPALIVE_INTERVAL_MS: z.coerce.number().int().min(1000).optional(),
+    SSH_KEEPALIVE_COUNT_MAX: z.coerce.number().int().min(0).default(3),
+    SSH_TRUST_ON_FIRST_USE: BooleanType.default(true),
+    SSH_KNOWN_HOSTS_PATH: NonEmptyOptionalString,
+    SSH_MAX_RECONNECT_ATTEMPTS: z.coerce.number().int().min(-1).default(5),
   })
   .superRefine((data, ctx) => {
     const hasHost = data.SSH_HOST !== undefined;
