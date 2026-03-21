@@ -57,7 +57,11 @@ export async function runQuery(
     const text =
       rows.length === 0
         ? "Query returned no rows"
-        : JSON.stringify({ rows, rowCount: rows.length, truncated }, null, 2);
+        : JSON.stringify(
+            { rows, rowCount: rows.length, ...(truncated ? { truncated } : {}) },
+            null,
+            2,
+          );
 
     return {
       content: [{ type: "text", text: text }],

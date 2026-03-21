@@ -6,7 +6,7 @@ import { z } from "zod";
 import { Pool } from "pg";
 import { loadEnvOrExit, resolveSshConfig } from "./config.js";
 import { PROJECT_INFO } from "./util.js";
-import { setupSshTunnelListeners, buildSshTunnel } from "./ssh-tunnel.js";
+import { buildSshTunnel, setupSshTunnelListeners } from "./ssh-tunnel.js";
 import {
   createDatabasePool,
   runDescribeTable,

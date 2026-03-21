@@ -11,7 +11,7 @@ import * as path from "node:path";
 import * as os from "node:os";
 import { EventEmitter } from "node:events";
 import { HostKeyVerifier } from "./host-key-verifier.js";
-import { createDatabasePool } from "./database";
+import { createDatabasePool } from "./database.js";
 import type { Pool } from "pg";
 
 export interface TunnelEvents {
