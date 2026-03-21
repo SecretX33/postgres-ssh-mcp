@@ -67,8 +67,8 @@ jobs:
 
       - name: Verify version in artifact
         env:
-          VERSION: ${{ needs.call-build.outputs.version }}
-          ARTIFACT: ${{ needs.call-build.outputs.artifact_name }}
+          VERSION: ${{ needs.build.outputs.version }}
+          ARTIFACT: ${{ needs.build.outputs.artifact_name }}
         run: |
           tar -xzf "$ARTIFACT" --strip-components=1 package/package.json
           FILE_VERSION=$(node -p "require('./package.json').version")
@@ -81,8 +81,8 @@ jobs:
       - name: Create GitHub release
         if: inputs.dry_run != true
         env:
-          TAG: ${{ needs.call-build.outputs.tag }}
-          ARTIFACT: ${{ needs.call-build.outputs.artifact_name }}
+          TAG: ${{ needs.build.outputs.tag }}
+          ARTIFACT: ${{ needs.build.outputs.artifact_name }}
         run: |
           gh release create "$TAG" "$ARTIFACT" \
             --repo "${{ github.repository }}" \
@@ -92,7 +92,7 @@ jobs:
       - name: Dry run notice
         if: inputs.dry_run == true
         env:
-          TAG: ${{ needs.call-build.outputs.tag }}
-          ARTIFACT: ${{ needs.call-build.outputs.artifact_name }}
+          TAG: ${{ needs.build.outputs.tag }}
+          ARTIFACT: ${{ needs.build.outputs.artifact_name }}
         run: |
           echo "::notice::Dry run mode. Would have created release $TAG with artifact $ARTIFACT"
