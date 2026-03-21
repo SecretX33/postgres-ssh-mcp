@@ -365,7 +365,7 @@ describe("createDatabasePool", () => {
     DB_SSL: false,
     DB_CONNECTION_POOL_SIZE: 5,
     DB_CONNECTION_TIMEOUT_MS: 10000,
-    DB_QUERY_TIMEOUT_SECONDS: 15,
+    DB_QUERY_TIMEOUT_MS: 15000,
     DB_MAX_ROWS: 1000,
     DB_SSL_CA: undefined,
     DB_SSL_REJECT_UNAUTHORIZED: true,
@@ -411,9 +411,9 @@ describe("createDatabasePool", () => {
     );
   });
 
-  it("constructs Pool with query_timeout from DB_QUERY_TIMEOUT_SECONDS", async () => {
-    await createDatabasePool({ ...baseEnv, DB_QUERY_TIMEOUT_SECONDS: 30 }, null);
-    expect(Pool).toHaveBeenCalledWith(expect.objectContaining({ query_timeout: 30 }));
+  it("constructs Pool with query_timeout from DB_QUERY_TIMEOUT_MS", async () => {
+    await createDatabasePool({ ...baseEnv, DB_QUERY_TIMEOUT_MS: 30000 }, null);
+    expect(Pool).toHaveBeenCalledWith(expect.objectContaining({ query_timeout: 30000 }));
   });
 
   it("returns the pool when connection test succeeds", async () => {
@@ -446,7 +446,7 @@ describe("createDatabasePool – SSL CA", () => {
     DB_SSL: false,
     DB_CONNECTION_POOL_SIZE: 5,
     DB_CONNECTION_TIMEOUT_MS: 10000,
-    DB_QUERY_TIMEOUT_SECONDS: 15,
+    DB_QUERY_TIMEOUT_MS: 15000,
     DB_MAX_ROWS: 1000,
     DB_SSL_CA: undefined,
     DB_SSL_REJECT_UNAUTHORIZED: true,
@@ -529,7 +529,7 @@ describe("createDatabasePool – Auto SSL", () => {
     DB_SSL: undefined,
     DB_CONNECTION_POOL_SIZE: 5,
     DB_CONNECTION_TIMEOUT_MS: 10000,
-    DB_QUERY_TIMEOUT_SECONDS: 15,
+    DB_QUERY_TIMEOUT_MS: 15000,
     DB_MAX_ROWS: 1000,
     DB_SSL_CA: undefined,
     DB_SSL_REJECT_UNAUTHORIZED: true,
@@ -751,7 +751,7 @@ describe("getConnectionStatus", () => {
     DB_SSL: undefined,
     DB_CONNECTION_POOL_SIZE: 5,
     DB_CONNECTION_TIMEOUT_MS: 10000,
-    DB_QUERY_TIMEOUT_SECONDS: 15,
+    DB_QUERY_TIMEOUT_MS: 15000,
     DB_MAX_ROWS: 1000,
     DB_SSL_CA: undefined,
     DB_SSL_REJECT_UNAUTHORIZED: true,
@@ -826,7 +826,7 @@ describe("getConnectionStatus", () => {
     const result = getConnectionStatus(pool, mockEnv, null, metadata);
     const parsed = JSON.parse((result.content[0] as { text: string }).text);
     expect(parsed.config.maxRows).toBe(1000);
-    expect(parsed.config.queryTimeoutSeconds).toBe(15);
+    expect(parsed.config.queryTimeoutMs).toBe(15000);
     expect(parsed.config.connectionPoolSize).toBe(5);
   });
 });
@@ -972,7 +972,7 @@ describe("structuredContent", () => {
       DB_SSL: undefined,
       DB_CONNECTION_POOL_SIZE: 5,
       DB_CONNECTION_TIMEOUT_MS: 10000,
-      DB_QUERY_TIMEOUT_SECONDS: 15,
+      DB_QUERY_TIMEOUT_MS: 15000,
       DB_MAX_ROWS: 1000,
       DB_SSL_CA: undefined,
       DB_SSL_REJECT_UNAUTHORIZED: true,

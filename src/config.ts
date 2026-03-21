@@ -39,7 +39,7 @@ export const EnvSchema = z
     DB_PASSWORD: NonEmptyString,
     DB_CONNECTION_POOL_SIZE: z.coerce.number().int().min(1).default(5),
     DB_CONNECTION_TIMEOUT_MS: z.coerce.number().int().min(0).default(10000),
-    DB_QUERY_TIMEOUT_SECONDS: z.coerce.number().int().min(0).default(15),
+    DB_QUERY_TIMEOUT_MS: z.coerce.number().int().min(0).default(15000),
     DB_READ_ONLY: BooleanType.default(true),
     DB_SSL: BooleanType.default(false),
     DB_MAX_ROWS: z.coerce.number().int().min(1).default(1000),

@@ -110,7 +110,7 @@ These are all environment variables that can be used to configure this MCP serve
 | `DB_MAX_ROWS`                  | `1000`   | Maximum rows returned per query. Uses cursor-based fetching in read-only mode    |
 | `DB_CONNECTION_POOL_SIZE`      | `5`      | Maximum number of connections in the pool                                        |
 | `DB_CONNECTION_TIMEOUT_MS`     | `10000`  | Milliseconds to wait for a connection from the pool                              |
-| `DB_QUERY_TIMEOUT_SECONDS`     | `15`     | How many seconds before a query is forcibly cancelled                            |
+| `DB_QUERY_TIMEOUT_MS`          | `15000`  | Milliseconds before a query is forcibly cancelled                                |
 | `DB_POOL_DRAIN_TIMEOUT_MS`     | `5000`   | Milliseconds to wait for old pool to drain during reconnection (0 to never wait) |
 | `SSH_HOST`                     | —        | SSH config alias (reads `~/.ssh/config`)                                         |
 | `SSH_HOSTNAME`                 | —        | Bastion hostname or IP                                                           |

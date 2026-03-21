@@ -84,7 +84,7 @@ export async function runQuery(
             content: [
               {
                 type: "text",
-                text: `Query timed out. The query exceeded the configured time limit (${pool.options.query_timeout}s). Try simplifying the query or increasing DB_QUERY_TIMEOUT_SECONDS.`,
+                text: `Query timed out. The query exceeded the configured time limit${pool.options.query_timeout ? ` (${pool.options.query_timeout}ms)` : ""}. Try simplifying the query or increasing DB_QUERY_TIMEOUT_MS.`,
               },
             ],
             isError: true,
@@ -207,7 +207,7 @@ export function getConnectionStatus(
     config: {
       readOnly: env.DB_READ_ONLY,
       maxRows: env.DB_MAX_ROWS,
-      queryTimeoutSeconds: env.DB_QUERY_TIMEOUT_SECONDS,
+      queryTimeoutMs: env.DB_QUERY_TIMEOUT_MS,
       connectionPoolSize: env.DB_CONNECTION_POOL_SIZE,
     },
     sshTunnel: sshTunnel ? "connected" : "not configured",
@@ -305,8 +305,7 @@ export async function createDatabasePool(
     max: env.DB_CONNECTION_POOL_SIZE,
     connectionTimeoutMillis:
       env.DB_CONNECTION_TIMEOUT_MS > 0 ? env.DB_CONNECTION_TIMEOUT_MS : undefined,
-    query_timeout:
-      env.DB_QUERY_TIMEOUT_SECONDS > 0 ? env.DB_QUERY_TIMEOUT_SECONDS : undefined,
+    query_timeout: env.DB_QUERY_TIMEOUT_MS > 0 ? env.DB_QUERY_TIMEOUT_MS : undefined,
     ssl,
   });
   db.on("error", (err) => {
