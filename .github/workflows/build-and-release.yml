@@ -26,13 +26,13 @@ on:
     outputs:
       version:
         description: 'Resolved package version (e.g. 1.2.3)'
-        value: ${{ jobs.call-build.outputs.version }}
+        value: ${{ jobs.build.outputs.version }}
       tag:
         description: 'Git tag (e.g. v1.2.3)'
-        value: ${{ jobs.call-build.outputs.tag }}
+        value: ${{ jobs.build.outputs.tag }}
       artifact_name:
         description: 'Filename of the .tgz artifact'
-        value: ${{ jobs.call-build.outputs.artifact_name }}
+        value: ${{ jobs.build.outputs.artifact_name }}
 
 permissions:
   contents: write
