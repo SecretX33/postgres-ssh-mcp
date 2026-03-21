@@ -36,27 +36,27 @@ function makePool(
 describe("runQuery", () => {
   it("readOnly=true → first query call is BEGIN TRANSACTION READ ONLY", async () => {
     const { pool, client } = makePool(() => Promise.resolve(makeResult([])));
-    await runQuery(pool, "SELECT 1", true);
+    await runQuery(pool, "SELECT 1", true, 1000);
     expect(client.query).toHaveBeenNthCalledWith(1, "BEGIN TRANSACTION READ ONLY");
   });
 
   it("readOnly=true → ROLLBACK is called in finally on success", async () => {
     const { pool, client } = makePool(() => Promise.resolve(makeResult([])));
-    await runQuery(pool, "SELECT 1", true);
+    await runQuery(pool, "SELECT 1", true, 1000);
     const calls = (client.query as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
     expect(calls).toContain("ROLLBACK");
   });
 
   it("readOnly=false → no BEGIN call made", async () => {
     const { pool, client } = makePool(() => Promise.resolve(makeResult([])));
-    await runQuery(pool, "SELECT 1", false);
+    await runQuery(pool, "SELECT 1", false, 1000);
     const calls = (client.query as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
     expect(calls).not.toContain("BEGIN TRANSACTION READ ONLY");
   });
 
   it("readOnly=false → no ROLLBACK call made", async () => {
     const { pool, client } = makePool(() => Promise.resolve(makeResult([])));
-    await runQuery(pool, "SELECT 1", false);
+    await runQuery(pool, "SELECT 1", false, 1000);
     const calls = (client.query as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
     expect(calls).not.toContain("ROLLBACK");
   });
@@ -67,7 +67,7 @@ describe("runQuery", () => {
       if (sql === "BEGIN TRANSACTION READ ONLY") return Promise.resolve(makeResult([]));
       return Promise.resolve(makeResult(rows));
     });
-    const result = await runQuery(pool, "SELECT * FROM users", true);
+    const result = await runQuery(pool, "SELECT * FROM users", true, 1000);
     expect(result.isError).toBeUndefined();
     const parsed = JSON.parse((result.content[0] as { text: string }).text);
     expect(parsed.rows).toEqual(rows);
@@ -76,7 +76,7 @@ describe("runQuery", () => {
 
   it("returns 'Query returned no rows' when rows is empty", async () => {
     const { pool } = makePool(() => Promise.resolve(makeResult([])));
-    const result = await runQuery(pool, "SELECT 1", false);
+    const result = await runQuery(pool, "SELECT 1", false, 1000);
     expect((result.content[0] as { text: string }).text).toBe("Query returned no rows");
   });
 
@@ -85,14 +85,14 @@ describe("runQuery", () => {
       if (sql === "BEGIN TRANSACTION READ ONLY") return Promise.resolve(makeResult([]));
       return Promise.reject(new Error("syntax error"));
     });
-    const result = await runQuery(pool, "BAD SQL", true);
+    const result = await runQuery(pool, "BAD SQL", true, 1000);
     expect(result.isError).toBe(true);
     expect((result.content[0] as { text: string }).text).toContain("syntax error");
   });
 
   it("returns isError=true + stringified value when a non-Error is thrown", async () => {
     const { pool } = makePool(() => Promise.reject("plain string error"));
-    const result = await runQuery(pool, "SELECT 1", false);
+    const result = await runQuery(pool, "SELECT 1", false, 1000);
     expect(result.isError).toBe(true);
     expect((result.content[0] as { text: string }).text).toContain("plain string error");
   });
@@ -103,14 +103,14 @@ describe("runQuery", () => {
       if (sql === "ROLLBACK") return Promise.reject(new Error("rollback failed"));
       return Promise.resolve(makeResult([]));
     });
-    const result = await runQuery(pool, "SELECT 1", true);
+    const result = await runQuery(pool, "SELECT 1", true, 1000);
     // No error returned to caller
     expect(result.isError).toBeUndefined();
   });
 
   it("client.release() is called even when the query throws", async () => {
     const { pool, client } = makePool(() => Promise.reject(new Error("oops")));
-    await runQuery(pool, "SELECT 1", false);
+    await runQuery(pool, "SELECT 1", false, 1000);
     expect(client.release).toHaveBeenCalledOnce();
   });
 
@@ -120,7 +120,7 @@ describe("runQuery", () => {
         return Promise.reject(new Error("begin failed"));
       return Promise.resolve(makeResult([]));
     });
-    await runQuery(pool, "SELECT 1", true);
+    await runQuery(pool, "SELECT 1", true, 1000);
     expect(client.release).toHaveBeenCalledOnce();
   });
 
@@ -132,7 +132,7 @@ describe("runQuery", () => {
     (pool as unknown as { options: { query_timeout: number } }).options = {
       query_timeout: 5000,
     };
-    const result = await runQuery(pool, "SELECT 1", false);
+    const result = await runQuery(pool, "SELECT 1", false, 1000);
     expect(result.isError).toBe(true);
     const text = (result.content[0] as { text: string }).text;
     expect(text).toContain("timed out");
@@ -247,20 +247,20 @@ describe("runDescribeTable", () => {
 describe("runQuery – validation integration", () => {
   it("returns isError response for DELETE statement when readOnly=true", async () => {
     const { pool } = makePool(() => Promise.resolve(makeResult([])));
-    const result = await runQuery(pool, "DELETE FROM t", true);
+    const result = await runQuery(pool, "DELETE FROM t", true, 1000);
     expect(result.isError).toBe(true);
     expect((result.content[0] as { text: string }).text).toMatch(/DELETE/i);
   });
 
   it("returns isError response for multi-statement input when readOnly=true", async () => {
     const { pool } = makePool(() => Promise.resolve(makeResult([])));
-    const result = await runQuery(pool, "SELECT 1; DROP TABLE t", true);
+    const result = await runQuery(pool, "SELECT 1; DROP TABLE t", true, 1000);
     expect(result.isError).toBe(true);
   });
 
   it("passes a valid SELECT through to the pool", async () => {
     const { pool } = makePool(() => Promise.resolve(makeResult([{ id: 1 }])));
-    const result = await runQuery(pool, "SELECT 1", false);
+    const result = await runQuery(pool, "SELECT 1", false, 1000);
     expect(result.isError).toBeUndefined();
   });
 });
@@ -286,7 +286,7 @@ describe("runQuery – MAX_ROWS limiting", () => {
     const result = await runQuery(pool, "SELECT * FROM t", true, 10);
     const parsed = JSON.parse((result.content[0] as { text: string }).text);
 
-    expect(parsed.truncated).toBe(false);
+    expect(parsed.truncated).toBeUndefined();
     expect(parsed.rows).toHaveLength(5);
     const calls = (client.query as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
     expect(calls.some((c: string) => c.startsWith("DECLARE"))).toBe(true);
@@ -320,7 +320,7 @@ describe("runQuery – MAX_ROWS limiting", () => {
     const result = await runQuery(pool, "SELECT * FROM t", false, 5);
     const parsed = JSON.parse((result.content[0] as { text: string }).text);
 
-    expect(parsed.truncated).toBe(false);
+    expect(parsed.truncated).toBeUndefined();
     const calls = (client.query as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
     expect(
       calls.some((c: string) => typeof c === "string" && c.startsWith("DECLARE")),
@@ -386,7 +386,7 @@ describe("createDatabasePool", () => {
   });
 
   it("constructs Pool with host 127.0.0.1 and sshTunnel.localPort when sshTunnel is provided", async () => {
-    const sshTunnel = { localPort: 54321, close: vi.fn() };
+    const sshTunnel = { localPort: 54321, close: vi.fn(), on: vi.fn() };
     await createDatabasePool(baseEnv, sshTunnel);
     expect(Pool).toHaveBeenCalledWith(
       expect.objectContaining({ host: "127.0.0.1", port: 54321 }),
