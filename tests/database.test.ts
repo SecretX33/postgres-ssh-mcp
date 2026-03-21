@@ -514,107 +514,6 @@ describe("createDatabasePool – SSL CA", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Auto SSL for non-localhost
-// ---------------------------------------------------------------------------
-
-describe("createDatabasePool – Auto SSL", () => {
-  const baseEnv: Env = {
-    DB_HOST: "db.example.com",
-    DB_PORT: 5432,
-    DB_NAME: "mydb",
-    DB_USER: "user",
-    DB_PASSWORD: "pass",
-    DB_READ_ONLY: true,
-    DB_SSL: undefined,
-    DB_CONNECTION_POOL_SIZE: 5,
-    DB_CONNECTION_TIMEOUT_MS: 10000,
-    DB_QUERY_TIMEOUT_MS: 15000,
-    DB_MAX_ROWS: 1000,
-    DB_SSL_CA: undefined,
-    DB_SSL_REJECT_UNAUTHORIZED: true,
-    SSH_STRICT_HOST_KEY_CHECKING: true,
-    SSH_PASSWORD: undefined,
-    SSH_KEEPALIVE_COUNT_MAX: 3,
-    SSH_TRUST_ON_FIRST_USE: true,
-    SSH_KNOWN_HOSTS_PATH: undefined,
-    SSH_MAX_RECONNECT_ATTEMPTS: 5,
-    DB_POOL_DRAIN_TIMEOUT_MS: 5000,
-  };
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    (Pool.prototype.query as ReturnType<typeof vi.fn>).mockResolvedValue(
-      makeResult([{ ok: 1 }]),
-    );
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it("auto-enables SSL for remote host when DB_SSL is undefined", async () => {
-    await createDatabasePool({ ...baseEnv, DB_SSL: undefined }, null);
-    expect(Pool).toHaveBeenCalledWith(expect.objectContaining({ ssl: true }));
-  });
-
-  it("auto-disables SSL for localhost when DB_SSL is undefined", async () => {
-    await createDatabasePool(
-      { ...baseEnv, DB_HOST: "localhost", DB_SSL: undefined },
-      null,
-    );
-    expect(Pool).toHaveBeenCalledWith(expect.objectContaining({ ssl: false }));
-  });
-
-  it("auto-disables SSL for 127.0.0.1 when DB_SSL is undefined", async () => {
-    await createDatabasePool(
-      { ...baseEnv, DB_HOST: "127.0.0.1", DB_SSL: undefined },
-      null,
-    );
-    expect(Pool).toHaveBeenCalledWith(expect.objectContaining({ ssl: false }));
-  });
-
-  it("auto-disables SSL for ::1 when DB_SSL is undefined", async () => {
-    await createDatabasePool({ ...baseEnv, DB_HOST: "::1", DB_SSL: undefined }, null);
-    expect(Pool).toHaveBeenCalledWith(expect.objectContaining({ ssl: false }));
-  });
-
-  it("explicit DB_SSL=true overrides auto for localhost", async () => {
-    await createDatabasePool({ ...baseEnv, DB_HOST: "localhost", DB_SSL: true }, null);
-    expect(Pool).toHaveBeenCalledWith(expect.objectContaining({ ssl: true }));
-  });
-
-  it("explicit DB_SSL=false overrides auto for remote host", async () => {
-    await createDatabasePool(
-      { ...baseEnv, DB_HOST: "remote.example.com", DB_SSL: false },
-      null,
-    );
-    expect(Pool).toHaveBeenCalledWith(expect.objectContaining({ ssl: false }));
-  });
-
-  it("uses original DB_HOST for auto-SSL check when SSH tunnel is active", async () => {
-    const sshTunnel = { localPort: 54321, close: vi.fn(), on: vi.fn() };
-    await createDatabasePool(
-      { ...baseEnv, DB_HOST: "remote.rds.amazonaws.com", DB_SSL: undefined },
-      sshTunnel,
-    );
-    // Pool connects to 127.0.0.1 (tunnel), but SSL check uses original DB_HOST
-    expect(Pool).toHaveBeenCalledWith(
-      expect.objectContaining({ host: "127.0.0.1", ssl: true }),
-    );
-  });
-
-  it("auto-enables SSL with DB_SSL_CA when DB_SSL is undefined and host is remote", async () => {
-    vi.mocked(fs.readFileSync).mockReturnValue("--- CA ---");
-    await createDatabasePool(
-      { ...baseEnv, DB_SSL: undefined, DB_SSL_CA: "/path/ca.pem" },
-      null,
-    );
-    expect(Pool).toHaveBeenCalledWith(
-      expect.objectContaining({ ssl: { ca: "--- CA ---" } }),
-    );
-  });
-});
 
 // ---------------------------------------------------------------------------
 // runQuery – parameterized queries
@@ -748,7 +647,7 @@ describe("getConnectionStatus", () => {
     DB_USER: "user",
     DB_PASSWORD: "pass",
     DB_READ_ONLY: true,
-    DB_SSL: undefined,
+    DB_SSL: false,
     DB_CONNECTION_POOL_SIZE: 5,
     DB_CONNECTION_TIMEOUT_MS: 10000,
     DB_QUERY_TIMEOUT_MS: 15000,
@@ -969,7 +868,7 @@ describe("structuredContent", () => {
       DB_USER: "user",
       DB_PASSWORD: "pass",
       DB_READ_ONLY: true,
-      DB_SSL: undefined,
+      DB_SSL: false,
       DB_CONNECTION_POOL_SIZE: 5,
       DB_CONNECTION_TIMEOUT_MS: 10000,
       DB_QUERY_TIMEOUT_MS: 15000,

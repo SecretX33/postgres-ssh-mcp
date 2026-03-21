@@ -772,14 +772,14 @@ describe("EnvSchema", () => {
     ]);
   });
 
-  it("should default DB_SSL to undefined (auto-detect)", () => {
+  it("should default DB_SSL to false", () => {
     const result = EnvSchema.parse({
       DB_HOST: "x",
       DB_NAME: "x",
       DB_USER: "x",
       DB_PASSWORD: "x",
     });
-    expect(result.DB_SSL).toBeUndefined();
+    expect(result.DB_SSL).toBe(false);
   });
 
   it("should accept DB_SSL=true explicitly", () => {

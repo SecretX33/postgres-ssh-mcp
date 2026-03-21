@@ -17,20 +17,23 @@ vi.mock("../src/ssh-tunnel.js", () => ({
   buildSshTunnel: vi.fn(async () => null),
   setupSshTunnelListeners: vi.fn(),
 }));
-vi.mock("../src/database.js", () => ({
-  createDatabasePool: vi.fn(async () => ({})),
-  fetchServerMetadata: vi.fn(async () => ({ version: null, databaseSize: null })),
-  fetchDatabaseMetadataAsync: vi.fn(() => ({ version: null, databaseSize: null })),
-  EXPLAIN_FORMATS: ["text", "json", "yaml", "xml"],
-  getConnectionStatus: vi.fn(() => ({
-    content: [{ type: "text", text: "{}" }],
-  })),
-  runQuery: vi.fn(async () => ({ content: [{ type: "text", text: "ok" }] })),
-  runExplainQuery: vi.fn(async () => ({ content: [{ type: "text", text: "ok" }] })),
-  runSchemaQuery: vi.fn(async () => ({ content: [{ type: "text", text: "[]" }] })),
-  runListTables: vi.fn(async () => ({ content: [{ type: "text", text: "[]" }] })),
-  runDescribeTable: vi.fn(async () => ({ content: [{ type: "text", text: "[]" }] })),
-}));
+vi.mock("../src/database.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/database.js")>();
+  return {
+    ...actual,
+    createDatabasePool: vi.fn(async () => ({})),
+    fetchServerMetadata: vi.fn(async () => ({ version: null, databaseSize: null })),
+    fetchDatabaseMetadataAsync: vi.fn(() => ({ version: null, databaseSize: null })),
+    getConnectionStatus: vi.fn(() => ({
+      content: [{ type: "text", text: "{}" }],
+    })),
+    runQuery: vi.fn(async () => ({ content: [{ type: "text", text: "ok" }] })),
+    runExplainQuery: vi.fn(async () => ({ content: [{ type: "text", text: "ok" }] })),
+    runSchemaQuery: vi.fn(async () => ({ content: [{ type: "text", text: "[]" }] })),
+    runListTables: vi.fn(async () => ({ content: [{ type: "text", text: "[]" }] })),
+    runDescribeTable: vi.fn(async () => ({ content: [{ type: "text", text: "[]" }] })),
+  };
+});
 vi.mock("../src/util.js", () => ({ PROJECT_INFO: { name: "test", version: "0.0.0" } }));
 vi.mock("@modelcontextprotocol/sdk/server/stdio.js", () => ({
   StdioServerTransport: vi.fn(function (this: any) {
@@ -61,7 +64,7 @@ const mockEnv = {
   DB_USER: "user",
   DB_PASSWORD: "pw",
   DB_READ_ONLY: true,
-  DB_SSL: undefined,
+  DB_SSL: false,
   DB_MAX_ROWS: 1000,
   DB_QUERY_TIMEOUT_MS: 15000,
   DB_CONNECTION_POOL_SIZE: 5,
