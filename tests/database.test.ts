@@ -862,3 +862,140 @@ describe("fetchServerMetadata", () => {
     expect(meta.databaseSize).toBeNull();
   });
 });
+
+describe("structuredContent", () => {
+  it("runQuery returns structuredContent with rows on success", async () => {
+    const rows = [{ id: 1 }];
+    const { pool } = makePool((sql) => {
+      if (sql === "BEGIN TRANSACTION READ ONLY") return Promise.resolve(makeResult([]));
+      return Promise.resolve(makeResult(rows));
+    });
+    const result = await runQuery(pool, "SELECT 1", true, 1000);
+    expect(result.structuredContent).toEqual({ rows, rowCount: 1 });
+  });
+
+  it("runQuery returns structuredContent with empty rows when no results", async () => {
+    const { pool } = makePool((sql) => {
+      if (sql === "BEGIN TRANSACTION READ ONLY") return Promise.resolve(makeResult([]));
+      return Promise.resolve(makeResult([]));
+    });
+    const result = await runQuery(pool, "SELECT 1", true, 1000);
+    expect(result.structuredContent).toEqual({ rows: [], rowCount: 0 });
+  });
+
+  it("runQuery includes truncated in structuredContent when rows exceed maxRows", async () => {
+    const mockRows = Array.from({ length: 6 }, (_, i) => ({ id: i }));
+    const { pool } = makePool((sql) => {
+      if (sql === "BEGIN TRANSACTION READ ONLY") return Promise.resolve(makeResult([]));
+      if (typeof sql === "string" && sql.startsWith("DECLARE"))
+        return Promise.resolve(makeResult([]));
+      if (typeof sql === "string" && sql.startsWith("FETCH"))
+        return Promise.resolve(makeResult(mockRows));
+      if (typeof sql === "string" && sql.startsWith("CLOSE"))
+        return Promise.resolve(makeResult([]));
+      return Promise.resolve(makeResult([]));
+    });
+    const result = await runQuery(pool, "SELECT * FROM t", true, 5);
+    expect(result.structuredContent).toEqual({
+      rows: mockRows.slice(0, 5),
+      rowCount: 5,
+      truncated: true,
+    });
+  });
+
+  it("runQuery does not return structuredContent on error", async () => {
+    const { pool } = makePool(() => Promise.reject(new Error("fail")));
+    const result = await runQuery(pool, "SELECT 1", false, 1000);
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
+  });
+
+  it("runQuery does not return structuredContent on validation error", async () => {
+    const { pool } = makePool(() => Promise.resolve(makeResult([])));
+    const result = await runQuery(pool, "DELETE FROM t", true, 1000);
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
+  });
+
+  it("runExplainQuery returns structuredContent with plan", async () => {
+    const { pool } = makePool(() =>
+      Promise.resolve(makeResult([{ "QUERY PLAN": "Seq Scan on t" }])),
+    );
+    const result = await runExplainQuery(pool, "SELECT 1", false, "text");
+    expect(result.structuredContent).toEqual({ plan: "Seq Scan on t" });
+  });
+
+  it("runExplainQuery does not return structuredContent on error", async () => {
+    const { pool } = makePool(() => Promise.reject(new Error("fail")));
+    const result = await runExplainQuery(pool, "SELECT 1", false, "text");
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
+  });
+
+  it("runSchemaQuery returns structuredContent with rows", async () => {
+    const rows = [{ schema_name: "public" }];
+    const { pool } = makePool(() => Promise.resolve(makeResult(rows)));
+    const result = await runSchemaQuery(pool);
+    expect(result.structuredContent).toEqual({ rows });
+  });
+
+  it("runListTables returns structuredContent with rows", async () => {
+    const rows = [{ table_name: "users" }];
+    const { pool } = makePool(() => Promise.resolve(makeResult(rows)));
+    const result = await runListTables(pool, "public");
+    expect(result.structuredContent).toEqual({ rows });
+  });
+
+  it("runDescribeTable returns structuredContent with rows", async () => {
+    const rows = [
+      {
+        column_name: "id",
+        data_type: "integer",
+        is_nullable: "NO",
+        column_default: null,
+      },
+    ];
+    const { pool } = makePool(() => Promise.resolve(makeResult(rows)));
+    const result = await runDescribeTable(pool, "public", "users");
+    expect(result.structuredContent).toEqual({ rows });
+  });
+
+  it("getConnectionStatus returns structuredContent", () => {
+    const pool = { totalCount: 2, idleCount: 1, waitingCount: 0 } as unknown as Pool;
+    const env: Env = {
+      DB_HOST: "db.example.com",
+      DB_PORT: 5432,
+      DB_NAME: "mydb",
+      DB_USER: "user",
+      DB_PASSWORD: "pass",
+      DB_READ_ONLY: true,
+      DB_SSL: undefined,
+      DB_CONNECTION_POOL_SIZE: 5,
+      DB_CONNECTION_TIMEOUT_MS: 10000,
+      DB_QUERY_TIMEOUT_SECONDS: 15,
+      DB_MAX_ROWS: 1000,
+      DB_SSL_CA: undefined,
+      DB_SSL_REJECT_UNAUTHORIZED: true,
+      SSH_STRICT_HOST_KEY_CHECKING: true,
+      SSH_PASSWORD: undefined,
+      SSH_KEEPALIVE_COUNT_MAX: 3,
+      SSH_TRUST_ON_FIRST_USE: true,
+      SSH_KNOWN_HOSTS_PATH: undefined,
+      SSH_MAX_RECONNECT_ATTEMPTS: 5,
+      DB_POOL_DRAIN_TIMEOUT_MS: 5000,
+    };
+    const metadata: DatabaseMetadata = { version: "PG 16", databaseSize: "10 MB" };
+    const result = getConnectionStatus(pool, env, null, metadata);
+    expect(result.structuredContent).toBeDefined();
+    const sc = result.structuredContent as Record<string, unknown>;
+    expect(sc.sshTunnel).toBe("not configured");
+    expect((sc.database as Record<string, unknown>).version).toBe("PG 16");
+  });
+
+  it("schema tools do not return structuredContent on error", async () => {
+    const { pool } = makePool(() => Promise.reject(new Error("db error")));
+    const result = await runSchemaQuery(pool);
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
+  });
+});

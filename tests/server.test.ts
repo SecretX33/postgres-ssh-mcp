@@ -20,6 +20,8 @@ vi.mock("../src/ssh-tunnel.js", () => ({
 vi.mock("../src/database.js", () => ({
   createDatabasePool: vi.fn(async () => ({})),
   fetchServerMetadata: vi.fn(async () => ({ version: null, databaseSize: null })),
+  fetchDatabaseMetadataAsync: vi.fn(() => ({ version: null, databaseSize: null })),
+  EXPLAIN_FORMATS: ["text", "json", "yaml", "xml"],
   getConnectionStatus: vi.fn(() => ({
     content: [{ type: "text", text: "{}" }],
   })),
@@ -180,27 +182,6 @@ describe("buildServer", () => {
     const { handler } = getTool("run_query");
     await handler({ sql: "SELECT $1", params: ["hello"] });
     expect(runQuery).toHaveBeenCalledWith(mockPool, "SELECT $1", true, 1000, ["hello"]);
-  });
-
-  it("run_query handler uses query field as fallback for sql", async () => {
-    build();
-    const { handler } = getTool("run_query");
-    await handler({ query: "SELECT 42" });
-    expect(runQuery).toHaveBeenCalledWith(mockPool, "SELECT 42", true, 1000, undefined);
-  });
-
-  it("run_query handler prefers sql over query when both present", async () => {
-    build();
-    const { handler } = getTool("run_query");
-    await handler({ sql: "SELECT 1", query: "SELECT 2" });
-    expect(runQuery).toHaveBeenCalledWith(mockPool, "SELECT 1", true, 1000, undefined);
-  });
-
-  it("run_query handler uses empty string when neither sql nor query provided", async () => {
-    build();
-    const { handler } = getTool("run_query");
-    await handler({});
-    expect(runQuery).toHaveBeenCalledWith(mockPool, "", true, 1000, undefined);
   });
 
   it("explain_query handler calls runExplainQuery", async () => {

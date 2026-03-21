@@ -65,17 +65,19 @@ export async function runQuery(
       }
     }
 
+    const structuredContent = {
+      rows,
+      rowCount: rows.length,
+      ...(truncated ? { truncated } : {}),
+    };
     const text =
       rows.length === 0
         ? "Query returned no rows"
-        : JSON.stringify(
-            { rows, rowCount: rows.length, ...(truncated ? { truncated } : {}) },
-            null,
-            2,
-          );
+        : JSON.stringify(structuredContent, null, 2);
 
     return {
-      content: [{ type: "text", text: text }],
+      content: [{ type: "text", text }],
+      structuredContent,
     };
   } catch (err) {
     if (err instanceof Error && err.message === "Query read timeout") {
@@ -132,13 +134,16 @@ export async function runExplainQuery(
     (result) => {
       const rows = result.rows;
       if (rows.length === 0) {
-        return "Query returned no rows";
+        return { text: "Query returned no rows", structuredContent: { plan: "" } };
       }
 
+      let plan: string;
       if (format === "json") {
-        return JSON.stringify(result.rows[0]?.["QUERY PLAN"], null, 2);
+        plan = JSON.stringify(result.rows[0]?.["QUERY PLAN"], null, 2);
+      } else {
+        plan = result.rows.map((r) => r["QUERY PLAN"]).join("\n");
       }
-      return result.rows.map((r) => r["QUERY PLAN"]).join("\n");
+      return { text: plan, structuredContent: { plan } };
     },
   );
 }
@@ -203,6 +208,7 @@ export function getConnectionStatus(
 
   return {
     content: [{ type: "text", text: JSON.stringify(status, null, 2) }],
+    structuredContent: status,
   };
 }
 
@@ -226,16 +232,26 @@ export async function fetchServerMetadata(pool: Pool): Promise<DatabaseMetadata>
 async function runUnsafeQuery(
   pool: Pool,
   queryFn: (client: PoolClient) => Promise<QueryResult>,
-  formatFn?: (result: QueryResult) => string,
+  formatResult?: (result: QueryResult) => {
+    text: string;
+    structuredContent: Record<string, unknown>;
+  },
 ): Promise<ToolResult> {
   const client = await pool.connect();
   try {
     const result = await queryFn(client);
 
-    const text = formatFn ? formatFn(result) : JSON.stringify(result.rows, null, 2);
+    if (formatResult) {
+      const { text, structuredContent } = formatResult(result);
+      return {
+        content: [{ type: "text", text }],
+        structuredContent,
+      };
+    }
 
     return {
-      content: [{ type: "text", text }],
+      content: [{ type: "text", text: JSON.stringify(result.rows, null, 2) }],
+      structuredContent: { rows: result.rows },
     };
   } catch (err) {
     return {

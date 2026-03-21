@@ -63,6 +63,11 @@ export function buildServer({
             .describe("Optional parameters for $1, $2, ... placeholders in the query")
             .optional(),
         }),
+        outputSchema: {
+          rows: z.array(z.record(z.string(), z.unknown())),
+          rowCount: z.number(),
+          truncated: z.boolean().optional(),
+        },
       },
       (input) => runQuery(poolRef.current, input.sql, readOnly, maxRows, input.params),
     );
@@ -81,6 +86,9 @@ export function buildServer({
             .default("text")
             .describe("Output format for the execution plan"),
         }),
+        outputSchema: {
+          plan: z.string(),
+        },
       },
       ({ sql, format }) =>
         runExplainQuery(poolRef.current, sql, readOnly, format as ExplainFormat),
@@ -90,7 +98,12 @@ export function buildServer({
   if (isAllowed("list_schemas")) {
     server.registerTool(
       "list_schemas",
-      { description: "List all schemas in the database." },
+      {
+        description: "List all schemas in the database.",
+        outputSchema: {
+          rows: z.array(z.object({ schema_name: z.string() })),
+        },
+      },
       () => runSchemaQuery(poolRef.current),
     );
   }
@@ -103,6 +116,9 @@ export function buildServer({
         inputSchema: z.object({
           schema: z.string().default("public").describe("Schema name"),
         }),
+        outputSchema: {
+          rows: z.array(z.object({ table_name: z.string() })),
+        },
       },
       ({ schema }) => runListTables(poolRef.current, schema),
     );
@@ -117,6 +133,16 @@ export function buildServer({
           schema: z.string().default("public").describe("Schema name"),
           table: z.string().describe("Table name"),
         }),
+        outputSchema: {
+          rows: z.array(
+            z.object({
+              column_name: z.string(),
+              data_type: z.string(),
+              is_nullable: z.string(),
+              column_default: z.string().nullable(),
+            }),
+          ),
+        },
       },
       ({ schema, table }) => runDescribeTable(poolRef.current, schema, table),
     );
@@ -128,6 +154,27 @@ export function buildServer({
       {
         description:
           "Show connection pool stats, database version, size, and server configuration.",
+        outputSchema: {
+          pool: z.object({
+            totalConnections: z.number(),
+            idleConnections: z.number(),
+            waitingRequests: z.number(),
+          }),
+          database: z.object({
+            version: z.string().nullable(),
+            size: z.string().nullable(),
+            host: z.string(),
+            port: z.number(),
+            name: z.string(),
+          }),
+          config: z.object({
+            readOnly: z.boolean(),
+            maxRows: z.number(),
+            queryTimeoutSeconds: z.number(),
+            connectionPoolSize: z.number(),
+          }),
+          sshTunnel: z.string(),
+        },
       },
       () => getConnectionStatus(poolRef.current, env, sshTunnel, databaseMetadata),
     );
