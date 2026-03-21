@@ -180,5 +180,28 @@ describe("buildServer", () => {
       });
       expect(registerToolSpy.mock.calls.length).toBe(4);
     });
+
+    it("registers zero tools when allowedTools is an empty array", () => {
+      buildServer({
+        poolRef: { current: mockPool },
+        readOnly: true,
+        maxRows: 1000,
+        allowedTools: [],
+      });
+      expect(registerToolSpy.mock.calls.length).toBe(0);
+    });
+  });
+
+  it("tool handler uses poolRef.current at call time, not build time", async () => {
+    const poolRef = { current: mockPool };
+    buildServer({ poolRef, readOnly: true, maxRows: 1000 });
+
+    // Swap the pool (simulating SSH reconnection pool swap)
+    const newPool = { newPool: true } as unknown as Pool;
+    poolRef.current = newPool;
+
+    const { handler } = getTool("run_query");
+    await handler({ sql: "SELECT 1" });
+    expect(runQuery).toHaveBeenCalledWith(newPool, "SELECT 1", true, 1000);
   });
 });
