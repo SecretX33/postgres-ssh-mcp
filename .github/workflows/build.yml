@@ -90,8 +90,13 @@ jobs:
       - name: Resolve version
         id: resolve-version
         run: |
-          version="${{ steps.sanitize.outputs.version || steps.auto-version.outputs.version }}"
-          tag="${{ steps.sanitize.outputs.tag || steps.auto-version.outputs.tag }}"
+          if [ -n "${{ steps.sanitize.outputs.version }}" ]; then
+            version="${{ steps.sanitize.outputs.version }}"
+            tag="${{ steps.sanitize.outputs.tag }}"
+          else
+            version="${{ steps.auto-version.outputs.version }}"
+            tag="${{ steps.auto-version.outputs.tag }}"
+          fi
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
           echo "Resolved version: ${version}, tag: ${tag}"

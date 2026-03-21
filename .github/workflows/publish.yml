@@ -23,6 +23,10 @@ on:
         required: false
         type: boolean
         default: false
+    secrets:
+      NPM_TOKEN:
+        description: 'NPM publish token'
+        required: true
 
 permissions:
   contents: read
@@ -55,6 +59,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: 22
+          registry-url: 'https://registry.npmjs.org'
 
       - name: Download release asset
         run: gh release download "${{ steps.sanitize.outputs.tag }}" --pattern "*.tgz"
@@ -69,6 +74,8 @@ jobs:
           ls -la *.tgz 2>/dev/null || echo "No .tgz files found!"
 
       - name: Publish to NPM
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           FLAGS="--access public --provenance"
           if [ "${{ inputs.dry_run }}" = "true" ]; then FLAGS="$FLAGS --dry-run"; fi
