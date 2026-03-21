@@ -20,7 +20,7 @@ permissions:
 jobs:
   release:
     if: github.repository == 'SecretX33/postgres-ssh-mcp'
-    uses: build-and-release.yml
+    uses: ./.github/workflows/build-and-release.yml
     with:
       version: ${{ inputs.version }}
 
