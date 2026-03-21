@@ -1,4 +1,4 @@
-import { Pool, type PoolClient, type QueryResult } from "pg";
+import { Pool, type PoolClient, type PoolOptions, type QueryResult } from "pg";
 import * as fs from "node:fs";
 import type { TunnelInfo } from "./ssh-tunnel.js";
 import type { Env } from "./config.js";
@@ -24,82 +24,50 @@ export async function runQuery(
   maxRows: number,
   params?: (string | number | boolean | null)[],
 ): Promise<ToolResult> {
-  try {
-    await validateQuery(sql, readOnly);
-  } catch (err) {
-    if (err instanceof ValidationError) {
-      return {
-        content: [{ type: "text", text: err.message }],
-        isError: true,
-      };
-    }
-    throw err;
-  }
+  const validationError = await validateUserProvidedQuery(sql, readOnly);
+  if (validationError) return validationError;
 
   return await withClient({
     pool,
     runInReadOnlyTransaction: readOnly,
     blockFn: async (client) => {
-      try {
-        let rows: Record<string, unknown>[];
-        let truncated = false;
+      let rows: Record<string, unknown>[];
+      let truncated = false;
 
-        if (readOnly) {
-          const cursorName = `mcp_cursor_${crypto.randomUUID().replace(/-/g, "")}`;
-          await client.query(`DECLARE ${cursorName} CURSOR FOR ${sql}`, params);
-          const result = await client.query(`FETCH ${maxRows + 1} FROM ${cursorName}`);
-          truncated = result.rows.length > maxRows;
-          rows = truncated ? result.rows.slice(0, maxRows) : result.rows;
-          await client.query(`CLOSE ${cursorName}`);
+      if (readOnly) {
+        const cursorName = `mcp_cursor_${crypto.randomUUID().replace(/-/g, "")}`;
+        await client.query(`DECLARE ${cursorName} CURSOR FOR ${sql}`, params);
+        const result = await client.query(`FETCH ${maxRows + 1} FROM ${cursorName}`);
+        truncated = result.rows.length > maxRows;
+        rows = truncated ? result.rows.slice(0, maxRows) : result.rows;
+        await client.query(`CLOSE ${cursorName}`);
+      } else {
+        const result = await client.query(sql, params);
+        if (result.rows.length > maxRows) {
+          truncated = true;
+          rows = result.rows.slice(0, maxRows);
         } else {
-          const result = await client.query(sql, params);
-          if (result.rows.length > maxRows) {
-            truncated = true;
-            rows = result.rows.slice(0, maxRows);
-          } else {
-            rows = result.rows;
-          }
+          rows = result.rows;
         }
-
-        const structuredContent =
-          rows.length > 0
-            ? {
-                rows,
-                rowCount: rows.length,
-                ...(truncated ? { truncated } : {}),
-              }
-            : undefined;
-        const text =
-          rows.length === 0
-            ? "Query returned no rows"
-            : JSON.stringify(structuredContent, null, 2);
-
-        return {
-          content: [{ type: "text", text }],
-          structuredContent,
-        };
-      } catch (err) {
-        if (err instanceof Error && err.message === "Query read timeout") {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Query timed out. The query exceeded the configured time limit${pool.options.query_timeout ? ` (${pool.options.query_timeout}ms)` : ""}. Try simplifying the query or increasing DB_QUERY_TIMEOUT_MS.`,
-              },
-            ],
-            isError: true,
-          };
-        }
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Error: ${err instanceof Error ? err.message : String(err)}`,
-            },
-          ],
-          isError: true,
-        };
       }
+
+      const structuredContent =
+        rows.length > 0
+          ? {
+              rows,
+              rowCount: rows.length,
+              ...(truncated ? { truncated } : {}),
+            }
+          : undefined;
+      const text =
+        rows.length === 0
+          ? "Query returned no rows"
+          : JSON.stringify(structuredContent, null, 2);
+
+      return {
+        content: [{ type: "text", text }],
+        structuredContent,
+      };
     },
   });
 }
@@ -110,17 +78,8 @@ export async function runExplainQuery(
   readOnly: boolean,
   format: ExplainFormat,
 ): Promise<ToolResult> {
-  try {
-    await validateQuery(sql, readOnly);
-  } catch (err) {
-    if (err instanceof ValidationError) {
-      return {
-        content: [{ type: "text", text: err.message }],
-        isError: true,
-      };
-    }
-    throw err;
-  }
+  const validationError = await validateUserProvidedQuery(sql, readOnly);
+  if (validationError) return validationError;
 
   const explainSql = `EXPLAIN (FORMAT ${format.toUpperCase()}) ${sql}`;
 
@@ -234,61 +193,94 @@ async function doRunQuery({
   };
 }): Promise<ToolResult> {
   const handler = async (client: PoolClient): Promise<ToolResult> => {
-    try {
-      const result = await queryFn(client);
+    const result = await queryFn(client);
 
-      if (customFormatResult) {
-        const { text, structuredContent } = customFormatResult(result);
-        return {
-          content: [{ type: "text", text }],
-          structuredContent,
-        };
-      }
-
+    if (customFormatResult) {
+      const { text, structuredContent } = customFormatResult(result);
       return {
-        content: [{ type: "text", text: JSON.stringify(result.rows, null, 2) }],
-        structuredContent: { rows: result.rows },
-      };
-    } catch (err) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Error: ${err instanceof Error ? err.message : String(err)}`,
-          },
-        ],
-        isError: true,
+        content: [{ type: "text", text }],
+        structuredContent,
       };
     }
+
+    return {
+      content: [{ type: "text", text: JSON.stringify(result.rows, null, 2) }],
+      structuredContent: { rows: result.rows },
+    };
   };
   return await withClient({ pool, runInReadOnlyTransaction, blockFn: handler });
 }
 
-async function withClient<T>({
+async function withClient({
   pool,
   runInReadOnlyTransaction = true,
   blockFn,
 }: {
   pool: Pool;
   runInReadOnlyTransaction: boolean;
-  blockFn: (client: PoolClient) => Promise<T>;
-}): Promise<T> {
-  const client = await pool.connect();
-  let startedTransaction = false;
-
+  blockFn: (client: PoolClient) => Promise<ToolResult>;
+}): Promise<ToolResult> {
   try {
-    if (runInReadOnlyTransaction) {
-      await client.query("BEGIN TRANSACTION READ ONLY");
-      startedTransaction = true;
-    }
+    const client = await pool.connect();
+    let startedTransaction = false;
 
-    return await blockFn(client);
-  } finally {
-    if (startedTransaction) {
-      await client.query("ROLLBACK").catch(() => {});
+    try {
+      if (runInReadOnlyTransaction) {
+        await client.query("BEGIN TRANSACTION READ ONLY");
+        startedTransaction = true;
+      }
+
+      return await blockFn(client);
+    } finally {
+      if (startedTransaction) {
+        await client.query("ROLLBACK").catch(() => {});
+      }
+      client.release();
     }
-    client.release();
+  } catch (err) {
+    return buildErrorResult(err, pool.options);
   }
+}
+
+function buildErrorResult(error: unknown, poolOptions: PoolOptions): ToolResult {
+  if (error instanceof Error && error.message === "Query read timeout") {
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Query timed out. The query exceeded the configured time limit${poolOptions.query_timeout ? ` (${poolOptions.query_timeout}ms)` : ""}. Try simplifying the query or increasing DB_QUERY_TIMEOUT_MS.`,
+        },
+      ],
+      isError: true,
+    };
+  }
+  return {
+    content: [
+      {
+        type: "text",
+        text: `Error: ${error instanceof Error ? error.message : String(error)}`,
+      },
+    ],
+    isError: true,
+  };
+}
+
+async function validateUserProvidedQuery(
+  sql: string,
+  readOnly: boolean,
+): Promise<ToolResult | null> {
+  try {
+    await validateQuery(sql, readOnly);
+  } catch (err) {
+    if (err instanceof ValidationError) {
+      return {
+        content: [{ type: "text", text: err.message }],
+        isError: true,
+      };
+    }
+    throw err;
+  }
+  return null;
 }
 
 export async function createDatabasePool(
