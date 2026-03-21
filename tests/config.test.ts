@@ -730,6 +730,79 @@ describe("EnvSchema", () => {
       }),
     ).toThrow();
   });
+
+  it("should accept explain_query in ALLOWED_TOOLS", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+      ALLOWED_TOOLS: "explain_query",
+    });
+    expect(result.ALLOWED_TOOLS).toEqual(["explain_query"]);
+  });
+
+  it("should accept get_connection_status in ALLOWED_TOOLS", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+      ALLOWED_TOOLS: "get_connection_status",
+    });
+    expect(result.ALLOWED_TOOLS).toEqual(["get_connection_status"]);
+  });
+
+  it("should accept all 6 tool names in ALLOWED_TOOLS", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+      ALLOWED_TOOLS:
+        "run_query,explain_query,list_schemas,list_tables,describe_table,get_connection_status",
+    });
+    expect(result.ALLOWED_TOOLS).toEqual([
+      "run_query",
+      "explain_query",
+      "list_schemas",
+      "list_tables",
+      "describe_table",
+      "get_connection_status",
+    ]);
+  });
+
+  it("should default DB_SSL to undefined (auto-detect)", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+    });
+    expect(result.DB_SSL).toBeUndefined();
+  });
+
+  it("should accept DB_SSL=true explicitly", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+      DB_SSL: "true",
+    });
+    expect(result.DB_SSL).toBe(true);
+  });
+
+  it("should accept DB_SSL=false explicitly", () => {
+    const result = EnvSchema.parse({
+      DB_HOST: "x",
+      DB_NAME: "x",
+      DB_USER: "x",
+      DB_PASSWORD: "x",
+      DB_SSL: "false",
+    });
+    expect(result.DB_SSL).toBe(false);
+  });
 });
 
 describe("parseSshConfigFile", () => {

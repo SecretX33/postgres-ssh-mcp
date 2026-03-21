@@ -3,10 +3,14 @@ import { Pool, type QueryResult } from "pg";
 import * as fs from "node:fs";
 import {
   runQuery,
+  runExplainQuery,
   runSchemaQuery,
   runListTables,
   runDescribeTable,
   createDatabasePool,
+  getConnectionStatus,
+  fetchServerMetadata,
+  type DatabaseMetadata,
 } from "../src/database.js";
 import type { Env } from "../src/config.js";
 
@@ -507,5 +511,354 @@ describe("createDatabasePool – SSL CA", () => {
     };
     await createDatabasePool(env, null);
     expect(Pool).toHaveBeenCalledWith(expect.objectContaining({ ssl: false }));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Auto SSL for non-localhost
+// ---------------------------------------------------------------------------
+
+describe("createDatabasePool – Auto SSL", () => {
+  const baseEnv: Env = {
+    DB_HOST: "db.example.com",
+    DB_PORT: 5432,
+    DB_NAME: "mydb",
+    DB_USER: "user",
+    DB_PASSWORD: "pass",
+    DB_READ_ONLY: true,
+    DB_SSL: undefined,
+    DB_CONNECTION_POOL_SIZE: 5,
+    DB_CONNECTION_TIMEOUT_MS: 10000,
+    DB_QUERY_TIMEOUT_SECONDS: 15,
+    DB_MAX_ROWS: 1000,
+    DB_SSL_CA: undefined,
+    DB_SSL_REJECT_UNAUTHORIZED: true,
+    SSH_STRICT_HOST_KEY_CHECKING: true,
+    SSH_PASSWORD: undefined,
+    SSH_KEEPALIVE_COUNT_MAX: 3,
+    SSH_TRUST_ON_FIRST_USE: true,
+    SSH_KNOWN_HOSTS_PATH: undefined,
+    SSH_MAX_RECONNECT_ATTEMPTS: 5,
+    DB_POOL_DRAIN_TIMEOUT_MS: 5000,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (Pool.prototype.query as ReturnType<typeof vi.fn>).mockResolvedValue(
+      makeResult([{ ok: 1 }]),
+    );
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("auto-enables SSL for remote host when DB_SSL is undefined", async () => {
+    await createDatabasePool({ ...baseEnv, DB_SSL: undefined }, null);
+    expect(Pool).toHaveBeenCalledWith(expect.objectContaining({ ssl: true }));
+  });
+
+  it("auto-disables SSL for localhost when DB_SSL is undefined", async () => {
+    await createDatabasePool(
+      { ...baseEnv, DB_HOST: "localhost", DB_SSL: undefined },
+      null,
+    );
+    expect(Pool).toHaveBeenCalledWith(expect.objectContaining({ ssl: false }));
+  });
+
+  it("auto-disables SSL for 127.0.0.1 when DB_SSL is undefined", async () => {
+    await createDatabasePool(
+      { ...baseEnv, DB_HOST: "127.0.0.1", DB_SSL: undefined },
+      null,
+    );
+    expect(Pool).toHaveBeenCalledWith(expect.objectContaining({ ssl: false }));
+  });
+
+  it("auto-disables SSL for ::1 when DB_SSL is undefined", async () => {
+    await createDatabasePool({ ...baseEnv, DB_HOST: "::1", DB_SSL: undefined }, null);
+    expect(Pool).toHaveBeenCalledWith(expect.objectContaining({ ssl: false }));
+  });
+
+  it("explicit DB_SSL=true overrides auto for localhost", async () => {
+    await createDatabasePool({ ...baseEnv, DB_HOST: "localhost", DB_SSL: true }, null);
+    expect(Pool).toHaveBeenCalledWith(expect.objectContaining({ ssl: true }));
+  });
+
+  it("explicit DB_SSL=false overrides auto for remote host", async () => {
+    await createDatabasePool(
+      { ...baseEnv, DB_HOST: "remote.example.com", DB_SSL: false },
+      null,
+    );
+    expect(Pool).toHaveBeenCalledWith(expect.objectContaining({ ssl: false }));
+  });
+
+  it("uses original DB_HOST for auto-SSL check when SSH tunnel is active", async () => {
+    const sshTunnel = { localPort: 54321, close: vi.fn(), on: vi.fn() };
+    await createDatabasePool(
+      { ...baseEnv, DB_HOST: "remote.rds.amazonaws.com", DB_SSL: undefined },
+      sshTunnel,
+    );
+    // Pool connects to 127.0.0.1 (tunnel), but SSL check uses original DB_HOST
+    expect(Pool).toHaveBeenCalledWith(
+      expect.objectContaining({ host: "127.0.0.1", ssl: true }),
+    );
+  });
+
+  it("auto-enables SSL with DB_SSL_CA when DB_SSL is undefined and host is remote", async () => {
+    vi.mocked(fs.readFileSync).mockReturnValue("--- CA ---");
+    await createDatabasePool(
+      { ...baseEnv, DB_SSL: undefined, DB_SSL_CA: "/path/ca.pem" },
+      null,
+    );
+    expect(Pool).toHaveBeenCalledWith(
+      expect.objectContaining({ ssl: { ca: "--- CA ---" } }),
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runQuery – parameterized queries
+// ---------------------------------------------------------------------------
+
+describe("runQuery – parameterized queries", () => {
+  it("passes params to client.query in write mode", async () => {
+    const { pool, client } = makePool(() => Promise.resolve(makeResult([{ id: 1 }])));
+    await runQuery(pool, "SELECT $1::int", false, 1000, [42]);
+    expect(client.query).toHaveBeenCalledWith("SELECT $1::int", [42]);
+  });
+
+  it("passes params to DECLARE CURSOR in read-only mode", async () => {
+    const { pool, client } = makePool((sql) => {
+      if (sql === "BEGIN TRANSACTION READ ONLY") return Promise.resolve(makeResult([]));
+      return Promise.resolve(makeResult([{ id: 1 }]));
+    });
+    await runQuery(pool, "SELECT $1::int", true, 1000, [42]);
+    const calls = (client.query as ReturnType<typeof vi.fn>).mock.calls;
+    const declareCalls = calls.filter(
+      (c) => typeof c[0] === "string" && c[0].startsWith("DECLARE"),
+    );
+    expect(declareCalls.length).toBe(1);
+    expect(declareCalls[0][1]).toEqual([42]);
+  });
+
+  it("works without params (undefined)", async () => {
+    const { pool, client } = makePool(() => Promise.resolve(makeResult([{ id: 1 }])));
+    await runQuery(pool, "SELECT 1", false, 1000);
+    expect(client.query).toHaveBeenCalledWith("SELECT 1", undefined);
+  });
+
+  it("works with empty params array", async () => {
+    const { pool, client } = makePool(() => Promise.resolve(makeResult([{ id: 1 }])));
+    await runQuery(pool, "SELECT 1", false, 1000, []);
+    expect(client.query).toHaveBeenCalledWith("SELECT 1", []);
+  });
+
+  it("passes null values in params", async () => {
+    const { pool, client } = makePool(() => Promise.resolve(makeResult([{ id: 1 }])));
+    await runQuery(pool, "SELECT $1", false, 1000, [null]);
+    expect(client.query).toHaveBeenCalledWith("SELECT $1", [null]);
+  });
+
+  it("passes mixed type params", async () => {
+    const { pool, client } = makePool(() => Promise.resolve(makeResult([])));
+    await runQuery(pool, "SELECT $1, $2, $3", false, 1000, ["hello", 42, true]);
+    expect(client.query).toHaveBeenCalledWith("SELECT $1, $2, $3", ["hello", 42, true]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runExplainQuery
+// ---------------------------------------------------------------------------
+
+describe("runExplainQuery", () => {
+  it("constructs EXPLAIN with TEXT format", async () => {
+    const { pool, client } = makePool(() =>
+      Promise.resolve(makeResult([{ "QUERY PLAN": "Seq Scan on t" }])),
+    );
+    const result = await runExplainQuery(pool, "SELECT 1", false, "text");
+    expect(result.isError).toBeUndefined();
+    expect(client.query).toHaveBeenCalledWith("EXPLAIN (FORMAT TEXT) SELECT 1");
+    expect((result.content[0] as { text: string }).text).toBe("Seq Scan on t");
+  });
+
+  it("constructs EXPLAIN with JSON format and parses output", async () => {
+    const planData = [{ Plan: { "Node Type": "Result" } }];
+    const { pool } = makePool(() =>
+      Promise.resolve(makeResult([{ "QUERY PLAN": planData }])),
+    );
+    const result = await runExplainQuery(pool, "SELECT 1", false, "json");
+    expect(result.isError).toBeUndefined();
+    const parsed = JSON.parse((result.content[0] as { text: string }).text);
+    expect(parsed).toEqual(planData);
+  });
+
+  it("constructs EXPLAIN with YAML format", async () => {
+    const { pool, client } = makePool(() =>
+      Promise.resolve(makeResult([{ "QUERY PLAN": "- Plan:" }])),
+    );
+    await runExplainQuery(pool, "SELECT 1", false, "yaml");
+    expect(client.query).toHaveBeenCalledWith("EXPLAIN (FORMAT YAML) SELECT 1");
+  });
+
+  it("constructs EXPLAIN with XML format", async () => {
+    const { pool, client } = makePool(() =>
+      Promise.resolve(makeResult([{ "QUERY PLAN": "<explain>" }])),
+    );
+    await runExplainQuery(pool, "SELECT 1", false, "xml");
+    expect(client.query).toHaveBeenCalledWith("EXPLAIN (FORMAT XML) SELECT 1");
+  });
+
+  it("joins multiple QUERY PLAN rows for text format", async () => {
+    const { pool } = makePool(() =>
+      Promise.resolve(
+        makeResult([
+          { "QUERY PLAN": "Seq Scan on t" },
+          { "QUERY PLAN": "  Filter: (id > 1)" },
+        ]),
+      ),
+    );
+    const result = await runExplainQuery(pool, "SELECT * FROM t", false, "text");
+    const text = (result.content[0] as { text: string }).text;
+    expect(text).toBe("Seq Scan on t\n  Filter: (id > 1)");
+  });
+
+  it("validates SQL and returns error for DML in read-only mode", async () => {
+    const { pool } = makePool(() => Promise.resolve(makeResult([])));
+    const result = await runExplainQuery(pool, "DELETE FROM t", true, "text");
+    expect(result.isError).toBe(true);
+  });
+
+  it("returns error when explain query throws", async () => {
+    const { pool } = makePool(() => Promise.reject(new Error("explain failed")));
+    const result = await runExplainQuery(pool, "SELECT 1", false, "text");
+    expect(result.isError).toBe(true);
+    expect((result.content[0] as { text: string }).text).toContain("explain failed");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getConnectionStatus
+// ---------------------------------------------------------------------------
+
+describe("getConnectionStatus", () => {
+  const mockEnv: Env = {
+    DB_HOST: "db.example.com",
+    DB_PORT: 5432,
+    DB_NAME: "mydb",
+    DB_USER: "user",
+    DB_PASSWORD: "pass",
+    DB_READ_ONLY: true,
+    DB_SSL: undefined,
+    DB_CONNECTION_POOL_SIZE: 5,
+    DB_CONNECTION_TIMEOUT_MS: 10000,
+    DB_QUERY_TIMEOUT_SECONDS: 15,
+    DB_MAX_ROWS: 1000,
+    DB_SSL_CA: undefined,
+    DB_SSL_REJECT_UNAUTHORIZED: true,
+    SSH_STRICT_HOST_KEY_CHECKING: true,
+    SSH_PASSWORD: undefined,
+    SSH_KEEPALIVE_COUNT_MAX: 3,
+    SSH_TRUST_ON_FIRST_USE: true,
+    SSH_KNOWN_HOSTS_PATH: undefined,
+    SSH_MAX_RECONNECT_ATTEMPTS: 5,
+    DB_POOL_DRAIN_TIMEOUT_MS: 5000,
+  };
+
+  it("returns valid JSON with all expected fields", () => {
+    const pool = {
+      totalCount: 5,
+      idleCount: 3,
+      waitingCount: 0,
+    } as unknown as Pool;
+    const metadata: DatabaseMetadata = {
+      version: "PostgreSQL 16.1",
+      databaseSize: "42 MB",
+    };
+
+    const result = getConnectionStatus(pool, mockEnv, null, metadata);
+    expect(result.isError).toBeUndefined();
+    const parsed = JSON.parse((result.content[0] as { text: string }).text);
+    expect(parsed.pool.totalConnections).toBe(5);
+    expect(parsed.pool.idleConnections).toBe(3);
+    expect(parsed.pool.waitingRequests).toBe(0);
+    expect(parsed.database.version).toBe("PostgreSQL 16.1");
+    expect(parsed.database.size).toBe("42 MB");
+    expect(parsed.config.readOnly).toBe(true);
+    expect(parsed.sshTunnel).toBe("not configured");
+  });
+
+  it("returns null metadata when not yet available", () => {
+    const pool = {
+      totalCount: 0,
+      idleCount: 0,
+      waitingCount: 0,
+    } as unknown as Pool;
+    const metadata: DatabaseMetadata = { version: null, databaseSize: null };
+
+    const result = getConnectionStatus(pool, mockEnv, null, metadata);
+    const parsed = JSON.parse((result.content[0] as { text: string }).text);
+    expect(parsed.database.version).toBeNull();
+    expect(parsed.database.size).toBeNull();
+  });
+
+  it("shows SSH tunnel as connected when sshTunnel is present", () => {
+    const pool = {
+      totalCount: 1,
+      idleCount: 1,
+      waitingCount: 0,
+    } as unknown as Pool;
+    const sshTunnel = { localPort: 54321, close: vi.fn(), on: vi.fn() };
+    const metadata: DatabaseMetadata = { version: null, databaseSize: null };
+
+    const result = getConnectionStatus(pool, mockEnv, sshTunnel, metadata);
+    const parsed = JSON.parse((result.content[0] as { text: string }).text);
+    expect(parsed.sshTunnel).toBe("connected");
+  });
+
+  it("includes config values", () => {
+    const pool = {
+      totalCount: 0,
+      idleCount: 0,
+      waitingCount: 0,
+    } as unknown as Pool;
+    const metadata: DatabaseMetadata = { version: null, databaseSize: null };
+
+    const result = getConnectionStatus(pool, mockEnv, null, metadata);
+    const parsed = JSON.parse((result.content[0] as { text: string }).text);
+    expect(parsed.config.maxRows).toBe(1000);
+    expect(parsed.config.queryTimeoutSeconds).toBe(15);
+    expect(parsed.config.connectionPoolSize).toBe(5);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fetchServerMetadata
+// ---------------------------------------------------------------------------
+
+describe("fetchServerMetadata", () => {
+  it("returns version and size when queries succeed", async () => {
+    const pool = {
+      query: vi.fn().mockImplementation((sql: string) => {
+        if (sql.includes("version()"))
+          return Promise.resolve({ rows: [{ version: "PG 16" }] });
+        if (sql.includes("pg_database_size"))
+          return Promise.resolve({ rows: [{ size: "100 MB" }] });
+        return Promise.resolve({ rows: [] });
+      }),
+    } as unknown as Pool;
+
+    const meta = await fetchServerMetadata(pool);
+    expect(meta.version).toBe("PG 16");
+    expect(meta.databaseSize).toBe("100 MB");
+  });
+
+  it("returns nulls when queries fail", async () => {
+    const pool = {
+      query: vi.fn().mockRejectedValue(new Error("permission denied")),
+    } as unknown as Pool;
+
+    const meta = await fetchServerMetadata(pool);
+    expect(meta.version).toBeNull();
+    expect(meta.databaseSize).toBeNull();
   });
 });

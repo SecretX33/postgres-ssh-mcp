@@ -289,7 +289,7 @@ const DANGEROUS_FUNCTIONS = new Set([
  */
 export async function validateQuery(sql: string, readOnly: boolean): Promise<void> {
   // Stage 2 pre-check — empty before parse
-  if (sql.trim() === "") {
+  if (sql.trim().length === 0) {
     throw new ValidationError("EMPTY_QUERY", "Query is empty");
   }
 
@@ -335,7 +335,7 @@ export async function validateQuery(sql: string, readOnly: boolean): Promise<voi
   if (stmtType === "ExplainStmt") {
     const explainNode = stmtNode["ExplainStmt"] as Record<string, unknown>;
     const innerStmt = explainNode["query"] as Record<string, unknown> | undefined;
-    const innerType = innerStmt ? Object.keys(innerStmt)[0] : "";
+    const innerType = innerStmt ? Object.keys(innerStmt)[0] : undefined;
     if (innerType !== "SelectStmt") {
       throw new ValidationError(
         "FORBIDDEN_EXPLAIN_TARGET",

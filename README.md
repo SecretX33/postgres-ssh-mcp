@@ -66,12 +66,23 @@ claude mcp add --transport stdio postgres-ssh-mcp \
 
 ## Tools
 
-| Tool             | Description                                                    |
-|------------------|----------------------------------------------------------------|
-| `run_query`      | Execute a SQL query (read-only by default; see `DB_READ_ONLY`) |
-| `list_schemas`   | List all schemas in the database                               |
-| `list_tables`    | List tables in a schema (default: `public`)                    |
-| `describe_table` | Show columns, types, and nullability for a table               |
+| Tool                    | Description                                                              |
+|-------------------------|--------------------------------------------------------------------------|
+| `run_query`             | Execute a SQL query (read-only by default; see `DB_READ_ONLY`). Supports parameterized queries with `$1, $2, ...` placeholders |
+| `explain_query`         | Get the execution plan for a SQL query (supports text, JSON, YAML, XML formats) |
+| `list_schemas`          | List all schemas in the database                                         |
+| `list_tables`           | List tables in a schema (default: `public`)                              |
+| `describe_table`        | Show columns, types, and nullability for a table                         |
+| `get_connection_status` | Show connection pool stats, database version, size, and server configuration |
+
+## Query Safety
+
+When `DB_READ_ONLY=true` (the default), queries go through multiple safety layers:
+
+1. **AST-level SQL validation** using `pgsql-parser` and `@pgsql/traverse` — parses SQL into an abstract syntax tree and walks it to detect mutations, including hidden ones in CTEs, `SELECT INTO`, and locking clauses. Only `SELECT` and `EXPLAIN` statements are allowed.
+2. **Dangerous function denylist** — blocks 250+ PostgreSQL functions that can cause side effects even inside read-only transactions, including `pg_sleep`, `nextval`, `pg_notify`, file I/O functions, advisory locks, and replication controls.
+3. **Read-only transaction wrapping** — all queries execute inside `BEGIN TRANSACTION READ ONLY` with automatic `ROLLBACK`.
+4. **Single-statement enforcement** — multi-statement queries are rejected before execution.
 
 ## Environment Variables
 
@@ -93,7 +104,7 @@ These are all environment variables that can be used to configure this MCP serve
 | `ALLOWED_TOOLS`                | _(all)_  | Comma-separated list of tools to register. When unset, all tools are available. Case-sensitive. Example: `run_query,describe_table` |
 | `DB_PORT`                      | `5432`   | Postgres port                                                                    |
 | `DB_READ_ONLY`                 | `true`   | Set to `false` to allow write queries (`run_query` only)                         |
-| `DB_SSL`                       | `false`  | Enable TLS for the database connection                                           |
+| `DB_SSL`                       | `auto`   | Enable TLS for the database connection. When unset, auto-enables for non-localhost hosts |
 | `DB_SSL_CA`                    | —        | Path to a custom CA certificate file (PEM) for SSL verification                  |
 | `DB_SSL_REJECT_UNAUTHORIZED`   | `true`   | Set to `false` to skip SSL certificate validation (insecure)                     |
 | `DB_MAX_ROWS`                  | `1000`   | Maximum rows returned per query. Uses cursor-based fetching in read-only mode    |

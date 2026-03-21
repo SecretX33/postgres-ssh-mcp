@@ -4,12 +4,22 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { Pool } from "pg";
-import { loadEnvOrExit, resolveSshConfig, ToolName } from "./config.js";
+import { type Env, loadEnvOrExit, resolveSshConfig, type ToolName } from "./config.js";
 import { PROJECT_INFO } from "./util.js";
-import { buildSshTunnel, setupSshTunnelListeners } from "./ssh-tunnel.js";
+import {
+  buildSshTunnel,
+  setupSshTunnelListeners,
+  type TunnelInfo,
+} from "./ssh-tunnel.js";
 import {
   createDatabasePool,
+  type DatabaseMetadata,
+  EXPLAIN_FORMATS,
+  type ExplainFormat,
+  fetchDatabaseMetadataAsync,
+  getConnectionStatus,
   runDescribeTable,
+  runExplainQuery,
   runListTables,
   runQuery,
   runSchemaQuery,
@@ -20,11 +30,17 @@ export function buildServer({
   readOnly,
   maxRows,
   allowedTools,
+  env,
+  sshTunnel,
+  databaseMetadata,
 }: {
   poolRef: { current: Pool };
   readOnly: boolean;
   maxRows: number;
   allowedTools?: ToolName[];
+  env: Env;
+  sshTunnel: TunnelInfo | null;
+  databaseMetadata: DatabaseMetadata;
 }): McpServer {
   const serverInfo = {
     name: PROJECT_INFO.name,
@@ -38,13 +54,36 @@ export function buildServer({
       "run_query",
       {
         description: readOnly
-          ? "Execute a read-only SQL query against the PostgreSQL database and return the results. All queries run inside a READ ONLY transaction."
-          : "Execute a SQL query against the PostgreSQL database and return the results.",
+          ? "Execute a read-only SQL query against the PostgreSQL database and return the results. All queries run inside a READ ONLY transaction. Supports parameterized queries using $1, $2, ... placeholders."
+          : "Execute a SQL query against the PostgreSQL database and return the results. Supports parameterized queries using $1, $2, ... placeholders.",
         inputSchema: z.object({
           sql: z.string().describe("The SQL query to execute"),
+          params: z
+            .array(z.union([z.string(), z.number(), z.boolean(), z.null()]))
+            .describe("Optional parameters for $1, $2, ... placeholders in the query")
+            .optional(),
         }),
       },
-      ({ sql }) => runQuery(poolRef.current, sql, readOnly, maxRows),
+      (input) => runQuery(poolRef.current, input.sql, readOnly, maxRows, input.params),
+    );
+  }
+
+  if (isAllowed("explain_query")) {
+    server.registerTool(
+      "explain_query",
+      {
+        description:
+          "Get the execution plan for a SQL query. Returns the EXPLAIN output in the specified format.",
+        inputSchema: z.object({
+          sql: z.string().describe("The SQL query to explain"),
+          format: z
+            .enum(EXPLAIN_FORMATS)
+            .default("text")
+            .describe("Output format for the execution plan"),
+        }),
+      },
+      ({ sql, format }) =>
+        runExplainQuery(poolRef.current, sql, readOnly, format as ExplainFormat),
     );
   }
 
@@ -83,6 +122,17 @@ export function buildServer({
     );
   }
 
+  if (isAllowed("get_connection_status")) {
+    server.registerTool(
+      "get_connection_status",
+      {
+        description:
+          "Show connection pool stats, database version, size, and server configuration.",
+      },
+      () => getConnectionStatus(poolRef.current, env, sshTunnel, databaseMetadata),
+    );
+  }
+
   return server;
 }
 
@@ -100,12 +150,16 @@ async function main() {
   if (sshTunnel) {
     setupSshTunnelListeners(sshTunnel, poolRef, env);
   }
+  const databaseMetadata = fetchDatabaseMetadataAsync(poolRef);
 
   const server = buildServer({
     poolRef,
     readOnly: env.DB_READ_ONLY,
     maxRows: env.DB_MAX_ROWS,
     allowedTools: env.ALLOWED_TOOLS,
+    env,
+    sshTunnel,
+    databaseMetadata,
   });
   const transport = new StdioServerTransport();
   await server.connect(transport);

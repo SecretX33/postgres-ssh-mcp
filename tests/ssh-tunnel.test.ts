@@ -38,7 +38,8 @@ function makeFakeTunnel(initialPort = 54321) {
   return {
     localPort: initialPort,
     close: vi.fn(),
-    on: (event: string, listener: (...args: any[]) => void) => emitter.on(event, listener),
+    on: (event: string, listener: (...args: any[]) => void) =>
+      emitter.on(event, listener),
     _emit: (event: string, ...args: any[]) => emitter.emit(event, ...args),
   };
 }
@@ -332,7 +333,10 @@ describe("buildSshTunnel", () => {
     const hostVerifier = (sshOptions as any).hostVerifier as (key: string) => boolean;
 
     const mockInstance = vi.mocked(HostKeyVerifier).mock.instances[0] as any;
-    mockInstance.verifyHostKey.mockReturnValue({ verified: false, reason: "key mismatch" });
+    mockInstance.verifyHostKey.mockReturnValue({
+      verified: false,
+      reason: "key mismatch",
+    });
 
     const result = hostVerifier(Buffer.from("some-key").toString("hex"));
 
@@ -349,7 +353,10 @@ describe("buildSshTunnel", () => {
     };
     await buildSshTunnel(baseEnv, config);
     expect(fs.statSync).not.toHaveBeenCalled();
-    Object.defineProperty(process, "platform", { value: originalPlatform, configurable: true });
+    Object.defineProperty(process, "platform", {
+      value: originalPlatform,
+      configurable: true,
+    });
   });
 });
 
@@ -374,7 +381,9 @@ describe("reconnect on client close", () => {
     const env = { ...baseEnv, SSH_MAX_RECONNECT_ATTEMPTS: 0 };
     await buildSshTunnel(env, baseSshConfig);
     getCloseHandler()();
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Reconnection disabled"));
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Reconnection disabled"),
+    );
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
@@ -631,9 +640,7 @@ describe("setupSshTunnelListeners", () => {
     const handler = (err: Error) => unhandled.push(err);
     process.on("unhandledRejection", handler);
 
-    vi.mocked(createDatabasePool).mockRejectedValueOnce(
-      new Error("connection failed"),
-    );
+    vi.mocked(createDatabasePool).mockRejectedValueOnce(new Error("connection failed"));
     setupSshTunnelListeners(tunnel as any, poolRef, baseEnv);
     tunnel._emit("reconnected", { oldPort: 100, newPort: 200 });
     await new Promise((r) => setImmediate(r));
