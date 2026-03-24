@@ -10,7 +10,7 @@ import * as net from "node:net";
 import * as path from "node:path";
 import * as os from "node:os";
 import { EventEmitter } from "node:events";
-import { HostKeyVerifier } from "./host-key-verifier.js";
+import { HostKeyVerifier, extractKeyType } from "./host-key-verifier.js";
 import { createDatabasePool } from "./database.js";
 import type { Pool } from "pg";
 
@@ -184,10 +184,11 @@ function buildSshOptions(env: Env, sshConfig: SshHostConfig): SshOptions {
     const verifier = new HostKeyVerifier(knownHostsPath, env.SSH_TRUST_ON_FIRST_USE);
     sshOptions.hostVerifier = (key: string) => {
       const publicKey = Buffer.from(key, "hex");
+      const keyType = extractKeyType(publicKey);
       const result = verifier.verifyHostKey(
         sshConfig.hostname,
         sshConfig.port,
-        "ssh-rsa",
+        keyType,
         publicKey,
       );
       if (!result.verified) {

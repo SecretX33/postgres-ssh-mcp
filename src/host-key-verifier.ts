@@ -13,6 +13,13 @@ interface KnownHost {
   publicKey: string;
 }
 
+export function extractKeyType(publicKey: Buffer): string {
+  if (publicKey.length < 4) return "unknown";
+  const typeLength = publicKey.readUInt32BE(0);
+  if (publicKey.length < 4 + typeLength) return "unknown";
+  return publicKey.subarray(4, 4 + typeLength).toString("ascii");
+}
+
 export class HostKeyVerifier {
   private knownHosts: KnownHost[] = [];
   private readonly knownHostsPath: string;
