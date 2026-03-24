@@ -6,11 +6,15 @@ vi.mock("node:fs", () => ({
   readFileSync: vi.fn(),
   statSync: vi.fn(),
 }));
-vi.mock("../src/host-key-verifier.js", () => {
+vi.mock("../src/host-key-verifier.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/host-key-verifier.js")>();
   function MockHostKeyVerifier(this: { verifyHostKey: ReturnType<typeof vi.fn> }) {
     this.verifyHostKey = vi.fn().mockReturnValue({ verified: true, reason: "ok" });
   }
-  return { HostKeyVerifier: vi.fn(MockHostKeyVerifier) };
+  return {
+    extractKeyType: actual.extractKeyType,
+    HostKeyVerifier: vi.fn(MockHostKeyVerifier),
+  };
 });
 vi.mock("../src/database.js", () => ({
   createDatabasePool: vi.fn(),
