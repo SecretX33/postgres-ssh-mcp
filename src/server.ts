@@ -75,7 +75,11 @@ export function buildServer({
         description:
           "Get the execution plan for a SQL query. Returns the EXPLAIN output in the specified format. Supports all PostgreSQL EXPLAIN options including ANALYZE for real execution statistics.",
         inputSchema: z.object({
-          sql: z.string().describe("The SQL query to explain"),
+          sql: z
+            .string()
+            .describe(
+              "The bare SQL query (e.g. `SELECT ...`) to explain - do not prefix it with 'EXPLAIN'",
+            ),
           format: EXPLAIN_FORMAT_SCHEMA.default("text").describe(
             "Output format for the execution plan",
           ),

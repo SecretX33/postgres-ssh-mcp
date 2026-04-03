@@ -33,14 +33,14 @@ describe("validateQuery – allowlist (readOnly=true)", () => {
     ).resolves.toBeUndefined();
   });
 
-  it("accepts EXPLAIN SELECT", async () => {
+  it("rejects EXPLAIN SELECT (sql must be unwrapped for explain_query)", async () => {
     await expect(
       validateQuery({
         sql: "EXPLAIN SELECT * FROM users",
         readOnly: true,
-        blockExplain: false,
+        mode: "explain",
       }),
-    ).resolves.toBeUndefined();
+    ).rejects.toMatchObject({ code: "EXPLAIN_UNWRAP_REQUIRED" });
   });
 
   it("rejects INSERT", async () => {
@@ -98,9 +98,9 @@ describe("validateQuery – EXPLAIN inner check (readOnly=true)", () => {
       validateQuery({
         sql: "EXPLAIN DELETE FROM t",
         readOnly: true,
-        blockExplain: false,
+        mode: "explain",
       }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN_EXPLAIN_TARGET" });
+    ).rejects.toMatchObject({ code: "EXPLAIN_UNWRAP_REQUIRED" });
   });
 
   it("rejects EXPLAIN INSERT", async () => {
@@ -108,9 +108,9 @@ describe("validateQuery – EXPLAIN inner check (readOnly=true)", () => {
       validateQuery({
         sql: "EXPLAIN INSERT INTO t(x) VALUES (1)",
         readOnly: true,
-        blockExplain: false,
+        mode: "explain",
       }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN_EXPLAIN_TARGET" });
+    ).rejects.toMatchObject({ code: "EXPLAIN_UNWRAP_REQUIRED" });
   });
 
   it("rejects EXPLAIN UPDATE", async () => {
@@ -118,122 +118,123 @@ describe("validateQuery – EXPLAIN inner check (readOnly=true)", () => {
       validateQuery({
         sql: "EXPLAIN UPDATE t SET x = 1",
         readOnly: true,
-        blockExplain: false,
+        mode: "explain",
       }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN_EXPLAIN_TARGET" });
+    ).rejects.toMatchObject({ code: "EXPLAIN_UNWRAP_REQUIRED" });
   });
 });
 
 describe("validateQuery – EXPLAIN ANALYZE (readOnly=true)", () => {
-  it("accepts EXPLAIN ANALYZE SELECT when blockExplain is false (explain_query path)", async () => {
+  it("rejects EXPLAIN ANALYZE SELECT when mode is explain (sql must be unwrapped)", async () => {
     await expect(
       validateQuery({
         sql: "EXPLAIN ANALYZE SELECT 1",
         readOnly: true,
-        blockExplain: false,
+        mode: "explain",
       }),
-    ).resolves.toBeUndefined();
+    ).rejects.toMatchObject({ code: "EXPLAIN_UNWRAP_REQUIRED" });
   });
 
-  it("accepts EXPLAIN (ANALYZE, BUFFERS) SELECT when blockExplain is false", async () => {
+  it("rejects EXPLAIN (ANALYZE, BUFFERS) SELECT when mode is explain", async () => {
     await expect(
       validateQuery({
         sql: "EXPLAIN (ANALYZE, BUFFERS) SELECT * FROM t",
         readOnly: true,
-        blockExplain: false,
+        mode: "explain",
       }),
-    ).resolves.toBeUndefined();
+    ).rejects.toMatchObject({ code: "EXPLAIN_UNWRAP_REQUIRED" });
   });
 
-  it("accepts plain EXPLAIN SELECT", async () => {
+  it("rejects plain EXPLAIN SELECT (sql must be unwrapped)", async () => {
     await expect(
       validateQuery({
         sql: "EXPLAIN SELECT * FROM t",
         readOnly: true,
-        blockExplain: false,
+        mode: "explain",
       }),
-    ).resolves.toBeUndefined();
+    ).rejects.toMatchObject({ code: "EXPLAIN_UNWRAP_REQUIRED" });
   });
 
-  it("accepts EXPLAIN (ANALYZE FALSE) SELECT", async () => {
+  it("rejects EXPLAIN (ANALYZE FALSE) SELECT (sql must be unwrapped)", async () => {
     await expect(
       validateQuery({
         sql: "EXPLAIN (ANALYZE FALSE) SELECT * FROM t",
         readOnly: true,
-        blockExplain: false,
+        mode: "explain",
       }),
-    ).resolves.toBeUndefined();
+    ).rejects.toMatchObject({ code: "EXPLAIN_UNWRAP_REQUIRED" });
   });
 
-  it("accepts EXPLAIN (ANALYZE OFF) SELECT", async () => {
+  it("rejects EXPLAIN (ANALYZE OFF) SELECT (sql must be unwrapped)", async () => {
     await expect(
       validateQuery({
         sql: "EXPLAIN (ANALYZE OFF) SELECT * FROM t",
         readOnly: true,
-        blockExplain: false,
+        mode: "explain",
       }),
-    ).resolves.toBeUndefined();
+    ).rejects.toMatchObject({ code: "EXPLAIN_UNWRAP_REQUIRED" });
   });
 
-  it("rejects EXPLAIN ANALYZE DELETE (DML target) even with blockExplain false", async () => {
+  it("rejects EXPLAIN ANALYZE DELETE (sql must be unwrapped, DML blocked upstream)", async () => {
     await expect(
       validateQuery({
         sql: "EXPLAIN ANALYZE DELETE FROM t",
         readOnly: true,
-        blockExplain: false,
+        mode: "explain",
       }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN_EXPLAIN_TARGET" });
+    ).rejects.toMatchObject({ code: "EXPLAIN_UNWRAP_REQUIRED" });
   });
 
-  it("rejects EXPLAIN ANALYZE SELECT with forbidden function", async () => {
+  it("rejects EXPLAIN ANALYZE SELECT with forbidden function (sql must be unwrapped)", async () => {
     await expect(
       validateQuery({
         sql: "EXPLAIN ANALYZE SELECT pg_read_file('/etc/passwd', 0, 100)",
         readOnly: true,
-        blockExplain: false,
+        mode: "explain",
       }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
+    ).rejects.toMatchObject({ code: "EXPLAIN_UNWRAP_REQUIRED" });
   });
 
-  it("rejects EXPLAIN ANALYZE via run_query (blockExplain true)", async () => {
+  it("rejects EXPLAIN ANALYZE via run_query (mode select)", async () => {
     await expect(
       validateQuery({
         sql: "EXPLAIN ANALYZE SELECT 1",
         readOnly: true,
-        blockExplain: true,
+        mode: "select",
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_EXPLAIN_IN_QUERY" });
   });
 
-  it("rejects EXPLAIN ANALYZE via run_query (blockExplain default)", async () => {
+  it("rejects EXPLAIN ANALYZE via run_query (mode select)", async () => {
     await expect(
       validateQuery({
         sql: "EXPLAIN ANALYZE SELECT 1",
         readOnly: true,
+        mode: "select",
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_EXPLAIN_IN_QUERY" });
   });
 });
 
-describe("validateQuery – blockExplain option", () => {
-  it("rejects EXPLAIN SELECT when blockExplain is true", async () => {
+describe("validateQuery – mode option", () => {
+  it("rejects EXPLAIN SELECT when mode is select", async () => {
     await expect(
-      validateQuery({ sql: "EXPLAIN SELECT 1", readOnly: true, blockExplain: true }),
+      validateQuery({ sql: "EXPLAIN SELECT 1", readOnly: true, mode: "select" }),
     ).rejects.toMatchObject({
       code: "FORBIDDEN_EXPLAIN_IN_QUERY",
       message: "Use the explain_query tool for EXPLAIN statements",
     });
   });
 
-  it("accepts EXPLAIN SELECT when blockExplain is false", async () => {
+  it("rejects EXPLAIN SELECT when mode is explain (sql must be unwrapped)", async () => {
     await expect(
-      validateQuery({ sql: "EXPLAIN SELECT 1", readOnly: true, blockExplain: false }),
-    ).resolves.toBeUndefined();
+      validateQuery({ sql: "EXPLAIN SELECT 1", readOnly: true, mode: "explain" }),
+    ).rejects.toMatchObject({ code: "EXPLAIN_UNWRAP_REQUIRED" });
   });
 
-  it("rejects EXPLAIN SELECT when blockExplain is omitted (defaults to true)", async () => {
+  it("rejects EXPLAIN SELECT when mode is select (default run_query path)", async () => {
     await expect(
-      validateQuery({ sql: "EXPLAIN SELECT 1", readOnly: true }),
+      validateQuery({ sql: "EXPLAIN SELECT 1", readOnly: true, mode: "select" }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_EXPLAIN_IN_QUERY" });
   });
 });

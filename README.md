@@ -69,7 +69,7 @@ claude mcp add --transport stdio postgres-ssh-mcp \
 | Tool                    | Description                                                              |
 |-------------------------|--------------------------------------------------------------------------|
 | `run_query`             | Execute a SQL query (read-only by default; see `DB_READ_ONLY`). Supports parameterized queries with `$1, $2, ...` placeholders |
-| `explain_query`         | Get the execution plan for a SQL query (supports text, JSON, YAML, XML formats) |
+| `explain_query`         | Get the execution plan for a SQL query. Pass the bare query (e.g. `SELECT ...`) — do not prefix it with `EXPLAIN`. Supports all PostgreSQL EXPLAIN options (ANALYZE, VERBOSE, COSTS, SETTINGS, GENERIC_PLAN, BUFFERS, WAL, TIMING, SUMMARY, MEMORY, SERIALIZE) and output formats (text, JSON, YAML, XML) |
 | `list_schemas`          | List all schemas in the database                                         |
 | `list_tables`           | List tables in a schema (default: `public`)                              |
 | `describe_table`        | Show columns, types, and nullability for a table                         |

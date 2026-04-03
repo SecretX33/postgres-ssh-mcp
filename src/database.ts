@@ -81,7 +81,11 @@ export async function runQuery(
   maxRows: number,
   params?: (string | number | boolean | null)[],
 ): Promise<ToolResult> {
-  const validationError = await validateUserProvidedQuery({ sql, readOnly });
+  const validationError = await validateUserProvidedQuery({
+    sql,
+    readOnly,
+    mode: "select",
+  });
   if (validationError) return validationError;
 
   return await withClient({
@@ -135,7 +139,7 @@ export async function runExplainQuery(
   const validationError = await validateUserProvidedQuery({
     sql,
     readOnly,
-    blockExplain: false,
+    mode: "explain",
   });
   if (validationError) return validationError;
 
