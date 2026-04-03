@@ -264,17 +264,22 @@ High-privilege configuration mutations.
 ---
 
 ### Category 18 — EXPLAIN ANALYZE (executes the inner query)
-`EXPLAIN ANALYZE` actually runs the query to collect runtime statistics. Any denylisted function
-can be fully executed this way if EXPLAIN ANALYZE is not blocked separately.
+`EXPLAIN ANALYZE` actually runs the query to collect runtime statistics. It is now **allowed
+through the `explain_query` tool** because that tool validates the inner query is SELECT-only,
+runs the deep AST walk (blocking dangerous functions, locking, nested mutations), and executes
+inside a `BEGIN TRANSACTION READ ONLY` + `ROLLBACK`. It remains **blocked via `run_query`**
+(where all EXPLAIN statements are rejected by `blockExplain: true`).
 
-| # | SQL | Expected |
-|---|-----|----------|
-| 18a | `EXPLAIN ANALYZE SELECT 1` | BLOCKED (Layer 1: FORBIDDEN_EXPLAIN_ANALYZE) |
-| 18b | `EXPLAIN (ANALYZE, BUFFERS) SELECT * FROM t` | BLOCKED (Layer 1: FORBIDDEN_EXPLAIN_ANALYZE) |
-| 18c | `EXPLAIN (ANALYZE TRUE) SELECT * FROM t` | BLOCKED (Layer 1: FORBIDDEN_EXPLAIN_ANALYZE) |
-| 18d | `EXPLAIN (ANALYZE FALSE) SELECT * FROM t` | ALLOWED — FALSE disables execution, harmless |
-| 18e | `EXPLAIN (ANALYZE OFF) SELECT * FROM t` | ALLOWED — OFF disables execution, harmless |
-| 18f | `EXPLAIN SELECT pg_read_file('/etc/passwd', 0, 100)` | BLOCKED (Layer 1: FORBIDDEN_FUNCTION via deep walk into EXPLAIN target) |
+| # | SQL | Context | Expected |
+|---|-----|---------|----------|
+| 18a | `EXPLAIN ANALYZE SELECT 1` | via `explain_query` | **ALLOWED** — inner SELECT validated, runs in read-only tx |
+| 18a' | `EXPLAIN ANALYZE SELECT 1` | via `run_query` | **BLOCKED** (Layer 1: `FORBIDDEN_EXPLAIN_IN_QUERY`) |
+| 18b | `EXPLAIN (ANALYZE, BUFFERS) SELECT * FROM t` | via `explain_query` | **ALLOWED** |
+| 18c | `EXPLAIN (ANALYZE TRUE) SELECT * FROM t` | via `explain_query` | **ALLOWED** |
+| 18d | `EXPLAIN (ANALYZE FALSE) SELECT * FROM t` | either tool | ALLOWED — FALSE disables execution, harmless |
+| 18e | `EXPLAIN (ANALYZE OFF) SELECT * FROM t` | either tool | ALLOWED — OFF disables execution, harmless |
+| 18f | `EXPLAIN SELECT pg_read_file('/etc/passwd', 0, 100)` | via `explain_query` | BLOCKED (Layer 1: FORBIDDEN_FUNCTION via deep walk into EXPLAIN target) |
+| 18g | `EXPLAIN ANALYZE SELECT pg_read_file('/etc/passwd', 0, 100)` | via `explain_query` | BLOCKED (Layer 1: FORBIDDEN_FUNCTION via deep walk into EXPLAIN target) |
 
 *Note: The parser represents `ANALYZE FALSE`/`ANALYZE OFF` as a `DefElem` with
 `arg: { String: { sval: "false" } }`. The validator reads the arg value to avoid this
@@ -564,7 +569,8 @@ SELECT * FROM pg_locks WHERE locktype = 'advisory';
 | `pg_read_file()` | **Blocked (FORBIDDEN_FUNCTION)** | Blocked (privilege) |
 | `lo_creat()` | **Blocked (FORBIDDEN_FUNCTION)** | Blocked (READ ONLY) |
 | `dblink` out-of-band mutation | **Blocked (FORBIDDEN_FUNCTION)** | Not blocked (separate connection) |
-| `EXPLAIN ANALYZE` (string args) | **Blocked (FORBIDDEN_EXPLAIN_ANALYZE)** | Would execute inner query |
+| `EXPLAIN ANALYZE` via `run_query` | **Blocked (FORBIDDEN_EXPLAIN_IN_QUERY)** | N/A |
+| `EXPLAIN ANALYZE` via `explain_query` | **Allowed** — inner SELECT validated + read-only tx | Blocked (READ ONLY tx) |
 | `EXPLAIN (ANALYZE 1)` integer arg | ~~**VULNERABLE** (Round 2 Cat 21)~~ → **Fixed** | Would execute inner query |
 | `MERGE` in writeable CTE | **Blocked (FORBIDDEN_NESTED_MUTATION)** | Blocked (READ ONLY) |
 | Schema-qualified dangerous fn | **Blocked (FORBIDDEN_FUNCTION, schema stripped)** | Blocked (privilege/READ ONLY) |
@@ -586,7 +592,9 @@ SELECT * FROM pg_locks WHERE locktype = 'advisory';
    are permitted.
 3. **Function denylist** (Layer 1): Dangerous built-in functions blocked by name at the AST
    level, including schema-qualified variants (schema prefix stripped, last segment checked).
-4. **EXPLAIN ANALYZE block** (Layer 1): Prevents using EXPLAIN to execute functions.
+4. **EXPLAIN ANALYZE** (Layer 1): Allowed through `explain_query` tool (inner query is validated
+   as SELECT-only, deep AST walk blocks dangerous functions, and runs in a read-only transaction).
+   Blocked via `run_query` (all EXPLAIN statements rejected by `blockExplain: true`).
 5. **MERGE in CTE block** (Layer 1): `MergeStmt` nodes inside CTEs are rejected.
 6. **READ ONLY transaction + ROLLBACK** (Layer 2): Catches DML not caught by Layer 1.
 

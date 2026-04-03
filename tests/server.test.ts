@@ -188,7 +188,9 @@ describe("buildServer", () => {
     build();
     const { handler } = getTool("explain_query");
     await handler({ sql: "SELECT 1", format: "json" });
-    expect(runExplainQuery).toHaveBeenCalledWith(mockPool, "SELECT 1", true, "json");
+    expect(runExplainQuery).toHaveBeenCalledWith(mockPool, "SELECT 1", true, {
+      format: "json",
+    });
   });
 
   it("get_connection_status handler calls getConnectionStatus", async () => {

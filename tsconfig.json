@@ -6,7 +6,7 @@
 
     /* Bundler mode */
     "moduleResolution": "bundler",
-    "outDir": "./dist",
+    "outDir": "dist",
     "esModuleInterop": true,
     "isolatedModules": true,
     "allowSyntheticDefaultImports": true,
@@ -16,8 +16,11 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "allowUnusedLabels": false,
+    "noUncheckedSideEffectImports": true,
+    "noImplicitOverride": true
   },
-  "include": ["src/**/*"],
+  "include": ["src"],
   "exclude": ["node_modules", "tests"]
 }

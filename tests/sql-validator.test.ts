@@ -12,14 +12,16 @@ describe("ValidationError", () => {
 
 describe("validateQuery – always-on checks (readOnly=false)", () => {
   it("throws EMPTY_QUERY for empty input", async () => {
-    await expect(validateQuery({ sql: "", readOnly: false })).rejects.toMatchObject({
+    await expect(
+      validateQuery({ sql: "", readOnly: false, mode: "select" }),
+    ).rejects.toMatchObject({
       code: "EMPTY_QUERY",
     });
   });
 
   it("throws MULTI_STATEMENT for multiple statements", async () => {
     await expect(
-      validateQuery({ sql: "SELECT 1; DROP TABLE t", readOnly: false }),
+      validateQuery({ sql: "SELECT 1; DROP TABLE t", readOnly: false, mode: "select" }),
     ).rejects.toMatchObject({
       code: "MULTI_STATEMENT",
     });
@@ -29,23 +31,27 @@ describe("validateQuery – always-on checks (readOnly=false)", () => {
 describe("validateQuery – allowlist (readOnly=true)", () => {
   it("accepts a plain SELECT", async () => {
     await expect(
-      validateQuery({ sql: "SELECT 1", readOnly: true }),
+      validateQuery({ sql: "SELECT 1", readOnly: true, mode: "select" }),
     ).resolves.toBeUndefined();
   });
 
-  it("accepts EXPLAIN SELECT", async () => {
+  it("rejects EXPLAIN SELECT (sql must be unwrapped for explain_query)", async () => {
     await expect(
       validateQuery({
         sql: "EXPLAIN SELECT * FROM users",
         readOnly: true,
-        blockExplain: false,
+        mode: "explain",
       }),
-    ).resolves.toBeUndefined();
+    ).rejects.toMatchObject({ code: "EXPLAIN_UNWRAP_REQUIRED" });
   });
 
   it("rejects INSERT", async () => {
     await expect(
-      validateQuery({ sql: "INSERT INTO t(x) VALUES (1)", readOnly: true }),
+      validateQuery({
+        sql: "INSERT INTO t(x) VALUES (1)",
+        readOnly: true,
+        mode: "select",
+      }),
     ).rejects.toMatchObject({
       code: "FORBIDDEN_STATEMENT",
     });
@@ -53,7 +59,7 @@ describe("validateQuery – allowlist (readOnly=true)", () => {
 
   it("rejects UPDATE", async () => {
     await expect(
-      validateQuery({ sql: "UPDATE t SET x = 1", readOnly: true }),
+      validateQuery({ sql: "UPDATE t SET x = 1", readOnly: true, mode: "select" }),
     ).rejects.toMatchObject({
       code: "FORBIDDEN_STATEMENT",
     });
@@ -61,7 +67,7 @@ describe("validateQuery – allowlist (readOnly=true)", () => {
 
   it("rejects DELETE", async () => {
     await expect(
-      validateQuery({ sql: "DELETE FROM t", readOnly: true }),
+      validateQuery({ sql: "DELETE FROM t", readOnly: true, mode: "select" }),
     ).rejects.toMatchObject({
       code: "FORBIDDEN_STATEMENT",
     });
@@ -69,7 +75,7 @@ describe("validateQuery – allowlist (readOnly=true)", () => {
 
   it("rejects CREATE TABLE", async () => {
     await expect(
-      validateQuery({ sql: "CREATE TABLE t (id INT)", readOnly: true }),
+      validateQuery({ sql: "CREATE TABLE t (id INT)", readOnly: true, mode: "select" }),
     ).rejects.toMatchObject({
       code: "FORBIDDEN_STATEMENT",
     });
@@ -77,7 +83,7 @@ describe("validateQuery – allowlist (readOnly=true)", () => {
 
   it("rejects DROP TABLE", async () => {
     await expect(
-      validateQuery({ sql: "DROP TABLE t", readOnly: true }),
+      validateQuery({ sql: "DROP TABLE t", readOnly: true, mode: "select" }),
     ).rejects.toMatchObject({
       code: "FORBIDDEN_STATEMENT",
     });
@@ -85,7 +91,7 @@ describe("validateQuery – allowlist (readOnly=true)", () => {
 
   it("rejects TRUNCATE", async () => {
     await expect(
-      validateQuery({ sql: "TRUNCATE t", readOnly: true }),
+      validateQuery({ sql: "TRUNCATE t", readOnly: true, mode: "select" }),
     ).rejects.toMatchObject({
       code: "FORBIDDEN_STATEMENT",
     });
@@ -98,9 +104,9 @@ describe("validateQuery – EXPLAIN inner check (readOnly=true)", () => {
       validateQuery({
         sql: "EXPLAIN DELETE FROM t",
         readOnly: true,
-        blockExplain: false,
+        mode: "explain",
       }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN_EXPLAIN_TARGET" });
+    ).rejects.toMatchObject({ code: "EXPLAIN_UNWRAP_REQUIRED" });
   });
 
   it("rejects EXPLAIN INSERT", async () => {
@@ -108,9 +114,9 @@ describe("validateQuery – EXPLAIN inner check (readOnly=true)", () => {
       validateQuery({
         sql: "EXPLAIN INSERT INTO t(x) VALUES (1)",
         readOnly: true,
-        blockExplain: false,
+        mode: "explain",
       }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN_EXPLAIN_TARGET" });
+    ).rejects.toMatchObject({ code: "EXPLAIN_UNWRAP_REQUIRED" });
   });
 
   it("rejects EXPLAIN UPDATE", async () => {
@@ -118,83 +124,123 @@ describe("validateQuery – EXPLAIN inner check (readOnly=true)", () => {
       validateQuery({
         sql: "EXPLAIN UPDATE t SET x = 1",
         readOnly: true,
-        blockExplain: false,
+        mode: "explain",
       }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN_EXPLAIN_TARGET" });
+    ).rejects.toMatchObject({ code: "EXPLAIN_UNWRAP_REQUIRED" });
   });
 });
 
 describe("validateQuery – EXPLAIN ANALYZE (readOnly=true)", () => {
-  it("rejects EXPLAIN ANALYZE SELECT", async () => {
+  it("rejects EXPLAIN ANALYZE SELECT when mode is explain (sql must be unwrapped)", async () => {
     await expect(
       validateQuery({
         sql: "EXPLAIN ANALYZE SELECT 1",
         readOnly: true,
-        blockExplain: false,
+        mode: "explain",
       }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN_EXPLAIN_ANALYZE" });
+    ).rejects.toMatchObject({ code: "EXPLAIN_UNWRAP_REQUIRED" });
   });
 
-  it("rejects EXPLAIN (ANALYZE, BUFFERS) SELECT", async () => {
+  it("rejects EXPLAIN (ANALYZE, BUFFERS) SELECT when mode is explain", async () => {
     await expect(
       validateQuery({
         sql: "EXPLAIN (ANALYZE, BUFFERS) SELECT * FROM t",
         readOnly: true,
-        blockExplain: false,
+        mode: "explain",
       }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN_EXPLAIN_ANALYZE" });
+    ).rejects.toMatchObject({ code: "EXPLAIN_UNWRAP_REQUIRED" });
   });
 
-  it("accepts plain EXPLAIN SELECT", async () => {
+  it("rejects plain EXPLAIN SELECT (sql must be unwrapped)", async () => {
     await expect(
       validateQuery({
         sql: "EXPLAIN SELECT * FROM t",
         readOnly: true,
-        blockExplain: false,
+        mode: "explain",
       }),
-    ).resolves.toBeUndefined();
+    ).rejects.toMatchObject({ code: "EXPLAIN_UNWRAP_REQUIRED" });
   });
 
-  it("accepts EXPLAIN (ANALYZE FALSE) SELECT", async () => {
+  it("rejects EXPLAIN (ANALYZE FALSE) SELECT (sql must be unwrapped)", async () => {
     await expect(
       validateQuery({
         sql: "EXPLAIN (ANALYZE FALSE) SELECT * FROM t",
         readOnly: true,
-        blockExplain: false,
+        mode: "explain",
       }),
-    ).resolves.toBeUndefined();
+    ).rejects.toMatchObject({ code: "EXPLAIN_UNWRAP_REQUIRED" });
   });
 
-  it("accepts EXPLAIN (ANALYZE OFF) SELECT", async () => {
+  it("rejects EXPLAIN (ANALYZE OFF) SELECT (sql must be unwrapped)", async () => {
     await expect(
       validateQuery({
         sql: "EXPLAIN (ANALYZE OFF) SELECT * FROM t",
         readOnly: true,
-        blockExplain: false,
+        mode: "explain",
       }),
-    ).resolves.toBeUndefined();
+    ).rejects.toMatchObject({ code: "EXPLAIN_UNWRAP_REQUIRED" });
+  });
+
+  it("rejects EXPLAIN ANALYZE DELETE (sql must be unwrapped, DML blocked upstream)", async () => {
+    await expect(
+      validateQuery({
+        sql: "EXPLAIN ANALYZE DELETE FROM t",
+        readOnly: true,
+        mode: "explain",
+      }),
+    ).rejects.toMatchObject({ code: "EXPLAIN_UNWRAP_REQUIRED" });
+  });
+
+  it("rejects EXPLAIN ANALYZE SELECT with forbidden function (sql must be unwrapped)", async () => {
+    await expect(
+      validateQuery({
+        sql: "EXPLAIN ANALYZE SELECT pg_read_file('/etc/passwd', 0, 100)",
+        readOnly: true,
+        mode: "explain",
+      }),
+    ).rejects.toMatchObject({ code: "EXPLAIN_UNWRAP_REQUIRED" });
+  });
+
+  it("rejects EXPLAIN ANALYZE via run_query (mode select)", async () => {
+    await expect(
+      validateQuery({
+        sql: "EXPLAIN ANALYZE SELECT 1",
+        readOnly: true,
+        mode: "select",
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN_EXPLAIN_IN_QUERY" });
+  });
+
+  it("rejects EXPLAIN ANALYZE via run_query (mode select)", async () => {
+    await expect(
+      validateQuery({
+        sql: "EXPLAIN ANALYZE SELECT 1",
+        readOnly: true,
+        mode: "select",
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN_EXPLAIN_IN_QUERY" });
   });
 });
 
-describe("validateQuery – blockExplain option", () => {
-  it("rejects EXPLAIN SELECT when blockExplain is true", async () => {
+describe("validateQuery – mode option", () => {
+  it("rejects EXPLAIN SELECT when mode is select", async () => {
     await expect(
-      validateQuery({ sql: "EXPLAIN SELECT 1", readOnly: true, blockExplain: true }),
+      validateQuery({ sql: "EXPLAIN SELECT 1", readOnly: true, mode: "select" }),
     ).rejects.toMatchObject({
       code: "FORBIDDEN_EXPLAIN_IN_QUERY",
       message: "Use the explain_query tool for EXPLAIN statements",
     });
   });
 
-  it("accepts EXPLAIN SELECT when blockExplain is false", async () => {
+  it("rejects EXPLAIN SELECT when mode is explain (sql must be unwrapped)", async () => {
     await expect(
-      validateQuery({ sql: "EXPLAIN SELECT 1", readOnly: true, blockExplain: false }),
-    ).resolves.toBeUndefined();
+      validateQuery({ sql: "EXPLAIN SELECT 1", readOnly: true, mode: "explain" }),
+    ).rejects.toMatchObject({ code: "EXPLAIN_UNWRAP_REQUIRED" });
   });
 
-  it("rejects EXPLAIN SELECT when blockExplain is omitted (defaults to true)", async () => {
+  it("rejects EXPLAIN SELECT when mode is select (default run_query path)", async () => {
     await expect(
-      validateQuery({ sql: "EXPLAIN SELECT 1", readOnly: true }),
+      validateQuery({ sql: "EXPLAIN SELECT 1", readOnly: true, mode: "select" }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_EXPLAIN_IN_QUERY" });
   });
 });
@@ -205,6 +251,7 @@ describe("validateQuery – deep AST walk (readOnly=true)", () => {
       validateQuery({
         sql: `WITH deleted AS (DELETE FROM t RETURNING id)SELECT *FROM deleted`,
         readOnly: true,
+        mode: "select",
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_NESTED_MUTATION" });
   });
@@ -214,6 +261,7 @@ describe("validateQuery – deep AST walk (readOnly=true)", () => {
       validateQuery({
         sql: `WITH ins AS (INSERT INTO t(x) VALUES (1) RETURNING id) SELECT * FROM ins`,
         readOnly: true,
+        mode: "select",
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_NESTED_MUTATION" });
   });
@@ -223,19 +271,28 @@ describe("validateQuery – deep AST walk (readOnly=true)", () => {
       validateQuery({
         sql: `WITH m AS (MERGE INTO t USING src ON t.id = src.id WHEN MATCHED THEN DELETE RETURNING t.id) SELECT * FROM m`,
         readOnly: true,
+        mode: "select",
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_NESTED_MUTATION" });
   });
 
   it("rejects SELECT INTO", async () => {
     await expect(
-      validateQuery({ sql: "SELECT * INTO new_table FROM old_table", readOnly: true }),
+      validateQuery({
+        sql: "SELECT * INTO new_table FROM old_table",
+        readOnly: true,
+        mode: "select",
+      }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_SELECT_INTO" });
   });
 
   it("rejects SELECT FOR UPDATE", async () => {
     await expect(
-      validateQuery({ sql: "SELECT * FROM t FOR UPDATE", readOnly: true }),
+      validateQuery({
+        sql: "SELECT * FROM t FOR UPDATE",
+        readOnly: true,
+        mode: "select",
+      }),
     ).rejects.toMatchObject({
       code: "FORBIDDEN_LOCKING",
     });
@@ -243,7 +300,7 @@ describe("validateQuery – deep AST walk (readOnly=true)", () => {
 
   it("rejects SELECT FOR SHARE", async () => {
     await expect(
-      validateQuery({ sql: "SELECT * FROM t FOR SHARE", readOnly: true }),
+      validateQuery({ sql: "SELECT * FROM t FOR SHARE", readOnly: true, mode: "select" }),
     ).rejects.toMatchObject({
       code: "FORBIDDEN_LOCKING",
     });
@@ -254,6 +311,7 @@ describe("validateQuery – deep AST walk (readOnly=true)", () => {
       validateQuery({
         sql: "SELECT * FROM (SELECT id FROM t WHERE x > 1) sub",
         readOnly: true,
+        mode: "select",
       }),
     ).resolves.toBeUndefined();
   });
@@ -263,6 +321,7 @@ describe("validateQuery – deep AST walk (readOnly=true)", () => {
       validateQuery({
         sql: `WITH cte AS (SELECT id FROM t)SELECT *FROM cte`,
         readOnly: true,
+        mode: "select",
       }),
     ).resolves.toBeUndefined();
   });
@@ -275,6 +334,7 @@ describe("validateQuery – function denylist (readOnly=true)", () => {
       validateQuery({
         sql: "SELECT pg_read_file('/etc/passwd', 0, 200)",
         readOnly: true,
+        mode: "select",
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
@@ -284,13 +344,14 @@ describe("validateQuery – function denylist (readOnly=true)", () => {
       validateQuery({
         sql: "SELECT pg_read_binary_file('pg_hba.conf', 0, 500)",
         readOnly: true,
+        mode: "select",
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
 
   it("blocks pg_ls_dir", async () => {
     await expect(
-      validateQuery({ sql: "SELECT pg_ls_dir('.')", readOnly: true }),
+      validateQuery({ sql: "SELECT pg_ls_dir('.')", readOnly: true, mode: "select" }),
     ).rejects.toMatchObject({
       code: "FORBIDDEN_FUNCTION",
     });
@@ -301,6 +362,7 @@ describe("validateQuery – function denylist (readOnly=true)", () => {
       validateQuery({
         sql: "SELECT pg_file_write('/tmp/evil.sh', 'data', false)",
         readOnly: true,
+        mode: "select",
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
@@ -308,7 +370,7 @@ describe("validateQuery – function denylist (readOnly=true)", () => {
   // Server administration
   it("blocks pg_reload_conf", async () => {
     await expect(
-      validateQuery({ sql: "SELECT pg_reload_conf()", readOnly: true }),
+      validateQuery({ sql: "SELECT pg_reload_conf()", readOnly: true, mode: "select" }),
     ).rejects.toMatchObject({
       code: "FORBIDDEN_FUNCTION",
     });
@@ -316,7 +378,11 @@ describe("validateQuery – function denylist (readOnly=true)", () => {
 
   it("blocks pg_terminate_backend", async () => {
     await expect(
-      validateQuery({ sql: "SELECT pg_terminate_backend(1234)", readOnly: true }),
+      validateQuery({
+        sql: "SELECT pg_terminate_backend(1234)",
+        readOnly: true,
+        mode: "select",
+      }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
 
@@ -325,6 +391,7 @@ describe("validateQuery – function denylist (readOnly=true)", () => {
       validateQuery({
         sql: "SELECT pg_cancel_backend(pg_backend_pid())",
         readOnly: true,
+        mode: "select",
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
@@ -332,52 +399,80 @@ describe("validateQuery – function denylist (readOnly=true)", () => {
   // Advisory locks
   it("blocks pg_advisory_lock", async () => {
     await expect(
-      validateQuery({ sql: "SELECT pg_advisory_lock(99999)", readOnly: true }),
+      validateQuery({
+        sql: "SELECT pg_advisory_lock(99999)",
+        readOnly: true,
+        mode: "select",
+      }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
 
   it("blocks pg_try_advisory_lock", async () => {
     await expect(
-      validateQuery({ sql: "SELECT pg_try_advisory_lock(99998)", readOnly: true }),
+      validateQuery({
+        sql: "SELECT pg_try_advisory_lock(99998)",
+        readOnly: true,
+        mode: "select",
+      }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
 
   it("blocks pg_advisory_xact_lock", async () => {
     await expect(
-      validateQuery({ sql: "SELECT pg_advisory_xact_lock(77777)", readOnly: true }),
+      validateQuery({
+        sql: "SELECT pg_advisory_xact_lock(77777)",
+        readOnly: true,
+        mode: "select",
+      }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
 
   // Advisory unlock
   it("blocks pg_advisory_unlock", async () => {
     await expect(
-      validateQuery({ sql: "SELECT pg_advisory_unlock(99999)", readOnly: true }),
+      validateQuery({
+        sql: "SELECT pg_advisory_unlock(99999)",
+        readOnly: true,
+        mode: "select",
+      }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
 
   it("blocks pg_advisory_unlock_shared", async () => {
     await expect(
-      validateQuery({ sql: "SELECT pg_advisory_unlock_shared(99999)", readOnly: true }),
+      validateQuery({
+        sql: "SELECT pg_advisory_unlock_shared(99999)",
+        readOnly: true,
+        mode: "select",
+      }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
 
   it("blocks pg_advisory_unlock_all", async () => {
     await expect(
-      validateQuery({ sql: "SELECT pg_advisory_unlock_all()", readOnly: true }),
+      validateQuery({
+        sql: "SELECT pg_advisory_unlock_all()",
+        readOnly: true,
+        mode: "select",
+      }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
 
   // Async messaging
   it("blocks pg_notify", async () => {
     await expect(
-      validateQuery({ sql: "SELECT pg_notify('chan', 'payload')", readOnly: true }),
+      validateQuery({
+        sql: "SELECT pg_notify('chan', 'payload')",
+        readOnly: true,
+        mode: "select",
+      }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
 
   // DoS
   it("blocks pg_sleep", async () => {
     await expect(
-      validateQuery({ sql: "SELECT pg_sleep(30)", readOnly: true }),
+      validateQuery({ sql: "SELECT pg_sleep(30)", readOnly: true, mode: "select" }),
     ).rejects.toMatchObject({
       code: "FORBIDDEN_FUNCTION",
     });
@@ -386,13 +481,21 @@ describe("validateQuery – function denylist (readOnly=true)", () => {
   // Sequences
   it("blocks nextval", async () => {
     await expect(
-      validateQuery({ sql: "SELECT nextval('users_id_seq')", readOnly: true }),
+      validateQuery({
+        sql: "SELECT nextval('users_id_seq')",
+        readOnly: true,
+        mode: "select",
+      }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
 
   it("blocks setval", async () => {
     await expect(
-      validateQuery({ sql: "SELECT setval('users_id_seq', 1)", readOnly: true }),
+      validateQuery({
+        sql: "SELECT setval('users_id_seq', 1)",
+        readOnly: true,
+        mode: "select",
+      }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
 
@@ -402,6 +505,7 @@ describe("validateQuery – function denylist (readOnly=true)", () => {
       validateQuery({
         sql: "SELECT set_config('session_replication_role', 'replica', false)",
         readOnly: true,
+        mode: "select",
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
@@ -412,6 +516,7 @@ describe("validateQuery – function denylist (readOnly=true)", () => {
       validateQuery({
         sql: "SELECT query_to_xml('DELETE FROM users', true, true, '')",
         readOnly: true,
+        mode: "select",
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
@@ -422,6 +527,7 @@ describe("validateQuery – function denylist (readOnly=true)", () => {
       validateQuery({
         sql: "SELECT * FROM dblink('dbname=x', 'DROP TABLE users') AS t(r text)",
         readOnly: true,
+        mode: "select",
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
@@ -429,7 +535,7 @@ describe("validateQuery – function denylist (readOnly=true)", () => {
   // Large objects
   it("blocks lo_creat", async () => {
     await expect(
-      validateQuery({ sql: "SELECT lo_creat(-1)", readOnly: true }),
+      validateQuery({ sql: "SELECT lo_creat(-1)", readOnly: true, mode: "select" }),
     ).rejects.toMatchObject({
       code: "FORBIDDEN_FUNCTION",
     });
@@ -441,6 +547,7 @@ describe("validateQuery – function denylist (readOnly=true)", () => {
       validateQuery({
         sql: "SELECT pg_catalog.pg_read_file('/etc/passwd', 0, 100)",
         readOnly: true,
+        mode: "select",
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
@@ -451,6 +558,7 @@ describe("validateQuery – function denylist (readOnly=true)", () => {
       validateQuery({
         sql: "SELECT * FROM (SELECT pg_read_file('/etc/passwd', 0, 100)) s",
         readOnly: true,
+        mode: "select",
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
@@ -461,6 +569,7 @@ describe("validateQuery – function denylist (readOnly=true)", () => {
       validateQuery({
         sql: "WITH x AS (SELECT pg_reload_conf()) SELECT * FROM x",
         readOnly: true,
+        mode: "select",
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
@@ -468,21 +577,33 @@ describe("validateQuery – function denylist (readOnly=true)", () => {
   // Allow-list: safe pg_ functions
   it("allows safe pg_ functions (pg_typeof, pg_size_pretty)", async () => {
     await expect(
-      validateQuery({ sql: "SELECT pg_typeof(1), pg_size_pretty(1024)", readOnly: true }),
+      validateQuery({
+        sql: "SELECT pg_typeof(1), pg_size_pretty(1024)",
+        readOnly: true,
+        mode: "select",
+      }),
     ).resolves.toBeUndefined();
   });
 
   // Allow-list: aggregate functions
   it("allows aggregate functions (count, sum)", async () => {
     await expect(
-      validateQuery({ sql: "SELECT count(*), sum(id) FROM t", readOnly: true }),
+      validateQuery({
+        sql: "SELECT count(*), sum(id) FROM t",
+        readOnly: true,
+        mode: "select",
+      }),
     ).resolves.toBeUndefined();
   });
 
   // Allow-list: currval is read-only
   it("allows currval (read-only sequence function)", async () => {
     await expect(
-      validateQuery({ sql: "SELECT currval('users_id_seq')", readOnly: true }),
+      validateQuery({
+        sql: "SELECT currval('users_id_seq')",
+        readOnly: true,
+        mode: "select",
+      }),
     ).resolves.toBeUndefined();
   });
 });
@@ -494,6 +615,7 @@ describe("validateQuery – expanded function denylist (readOnly=true)", () => {
       validateQuery({
         sql: "SELECT binary_upgrade_set_next_pg_type_oid(1::oid)",
         readOnly: true,
+        mode: "select",
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
@@ -504,6 +626,7 @@ describe("validateQuery – expanded function denylist (readOnly=true)", () => {
       validateQuery({
         sql: "SELECT gin_clean_pending_list('myidx'::regclass)",
         readOnly: true,
+        mode: "select",
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
@@ -512,6 +635,7 @@ describe("validateQuery – expanded function denylist (readOnly=true)", () => {
       validateQuery({
         sql: "SELECT brin_summarize_new_values('myidx'::regclass)",
         readOnly: true,
+        mode: "select",
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
@@ -519,7 +643,11 @@ describe("validateQuery – expanded function denylist (readOnly=true)", () => {
   // Bulk XML
   it("blocks database_to_xml", async () => {
     await expect(
-      validateQuery({ sql: "SELECT database_to_xml(true, true, '')", readOnly: true }),
+      validateQuery({
+        sql: "SELECT database_to_xml(true, true, '')",
+        readOnly: true,
+        mode: "select",
+      }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
   it("blocks schema_to_xml", async () => {
@@ -527,6 +655,7 @@ describe("validateQuery – expanded function denylist (readOnly=true)", () => {
       validateQuery({
         sql: "SELECT schema_to_xml('public', true, true, '')",
         readOnly: true,
+        mode: "select",
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
@@ -535,6 +664,7 @@ describe("validateQuery – expanded function denylist (readOnly=true)", () => {
       validateQuery({
         sql: "SELECT table_to_xml('mytable'::regclass, true, true, '')",
         readOnly: true,
+        mode: "select",
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
@@ -542,36 +672,60 @@ describe("validateQuery – expanded function denylist (readOnly=true)", () => {
   // lo writes
   it("blocks lo_from_bytea", async () => {
     await expect(
-      validateQuery({ sql: "SELECT lo_from_bytea(0, '\\xDEAD'::bytea)", readOnly: true }),
+      validateQuery({
+        sql: "SELECT lo_from_bytea(0, '\\xDEAD'::bytea)",
+        readOnly: true,
+        mode: "select",
+      }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
   it("blocks lo_put", async () => {
     await expect(
-      validateQuery({ sql: "SELECT lo_put(16384, 0, '\\xDEAD'::bytea)", readOnly: true }),
+      validateQuery({
+        sql: "SELECT lo_put(16384, 0, '\\xDEAD'::bytea)",
+        readOnly: true,
+        mode: "select",
+      }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
 
   // WAL replay
   it("blocks pg_wal_replay_pause", async () => {
     await expect(
-      validateQuery({ sql: "SELECT pg_wal_replay_pause()", readOnly: true }),
+      validateQuery({
+        sql: "SELECT pg_wal_replay_pause()",
+        readOnly: true,
+        mode: "select",
+      }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
   it("blocks pg_wal_replay_resume", async () => {
     await expect(
-      validateQuery({ sql: "SELECT pg_wal_replay_resume()", readOnly: true }),
+      validateQuery({
+        sql: "SELECT pg_wal_replay_resume()",
+        readOnly: true,
+        mode: "select",
+      }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
 
   // Stats
   it("blocks pg_stat_clear_snapshot", async () => {
     await expect(
-      validateQuery({ sql: "SELECT pg_stat_clear_snapshot()", readOnly: true }),
+      validateQuery({
+        sql: "SELECT pg_stat_clear_snapshot()",
+        readOnly: true,
+        mode: "select",
+      }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
   it("blocks pg_stat_force_next_flush", async () => {
     await expect(
-      validateQuery({ sql: "SELECT pg_stat_force_next_flush()", readOnly: true }),
+      validateQuery({
+        sql: "SELECT pg_stat_force_next_flush()",
+        readOnly: true,
+        mode: "select",
+      }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
   it("blocks pg_stat_reset_subscription_stats", async () => {
@@ -579,6 +733,7 @@ describe("validateQuery – expanded function denylist (readOnly=true)", () => {
       validateQuery({
         sql: "SELECT pg_stat_reset_subscription_stats(1::oid)",
         readOnly: true,
+        mode: "select",
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
@@ -586,12 +741,16 @@ describe("validateQuery – expanded function denylist (readOnly=true)", () => {
   // PG15+ backup names
   it("blocks pg_backup_start", async () => {
     await expect(
-      validateQuery({ sql: "SELECT pg_backup_start('label')", readOnly: true }),
+      validateQuery({
+        sql: "SELECT pg_backup_start('label')",
+        readOnly: true,
+        mode: "select",
+      }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
   it("blocks pg_backup_stop", async () => {
     await expect(
-      validateQuery({ sql: "SELECT pg_backup_stop()", readOnly: true }),
+      validateQuery({ sql: "SELECT pg_backup_stop()", readOnly: true, mode: "select" }),
     ).rejects.toMatchObject({
       code: "FORBIDDEN_FUNCTION",
     });
@@ -600,17 +759,25 @@ describe("validateQuery – expanded function denylist (readOnly=true)", () => {
   // Settings / config disclosure
   it("blocks pg_show_all_settings", async () => {
     await expect(
-      validateQuery({ sql: "SELECT * FROM pg_show_all_settings()", readOnly: true }),
+      validateQuery({
+        sql: "SELECT * FROM pg_show_all_settings()",
+        readOnly: true,
+        mode: "select",
+      }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
   it("blocks pg_show_all_file_settings", async () => {
     await expect(
-      validateQuery({ sql: "SELECT * FROM pg_show_all_file_settings()", readOnly: true }),
+      validateQuery({
+        sql: "SELECT * FROM pg_show_all_file_settings()",
+        readOnly: true,
+        mode: "select",
+      }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
   it("blocks pg_config", async () => {
     await expect(
-      validateQuery({ sql: "SELECT * FROM pg_config()", readOnly: true }),
+      validateQuery({ sql: "SELECT * FROM pg_config()", readOnly: true, mode: "select" }),
     ).rejects.toMatchObject({
       code: "FORBIDDEN_FUNCTION",
     });
@@ -622,6 +789,7 @@ describe("validateQuery – expanded function denylist (readOnly=true)", () => {
       validateQuery({
         sql: "SELECT pg_replication_origin_create('my_origin')",
         readOnly: true,
+        mode: "select",
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
@@ -630,6 +798,7 @@ describe("validateQuery – expanded function denylist (readOnly=true)", () => {
       validateQuery({
         sql: "SELECT pg_replication_origin_drop('my_origin')",
         readOnly: true,
+        mode: "select",
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
@@ -638,6 +807,7 @@ describe("validateQuery – expanded function denylist (readOnly=true)", () => {
       validateQuery({
         sql: "SELECT pg_replication_origin_advance('my_origin', '0/1'::pg_lsn)",
         readOnly: true,
+        mode: "select",
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
@@ -645,7 +815,11 @@ describe("validateQuery – expanded function denylist (readOnly=true)", () => {
   // Memory layout
   it("blocks pg_get_shmem_allocations", async () => {
     await expect(
-      validateQuery({ sql: "SELECT * FROM pg_get_shmem_allocations()", readOnly: true }),
+      validateQuery({
+        sql: "SELECT * FROM pg_get_shmem_allocations()",
+        readOnly: true,
+        mode: "select",
+      }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
   it("blocks pg_get_backend_memory_contexts", async () => {
@@ -653,6 +827,7 @@ describe("validateQuery – expanded function denylist (readOnly=true)", () => {
       validateQuery({
         sql: "SELECT * FROM pg_get_backend_memory_contexts()",
         readOnly: true,
+        mode: "select",
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
@@ -663,6 +838,7 @@ describe("validateQuery – expanded function denylist (readOnly=true)", () => {
       validateQuery({
         sql: "SELECT pg_extension_config_dump('mytable', '')",
         readOnly: true,
+        mode: "select",
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
@@ -670,7 +846,7 @@ describe("validateQuery – expanded function denylist (readOnly=true)", () => {
   // system
   it("blocks system", async () => {
     await expect(
-      validateQuery({ sql: "SELECT system('ls')", readOnly: true }),
+      validateQuery({ sql: "SELECT system('ls')", readOnly: true, mode: "select" }),
     ).rejects.toMatchObject({
       code: "FORBIDDEN_FUNCTION",
     });
@@ -682,6 +858,7 @@ describe("validateQuery – expanded function denylist (readOnly=true)", () => {
       validateQuery({
         sql: "SELECT * FROM pg_logical_slot_peek_binary_changes('slot', NULL, NULL)",
         readOnly: true,
+        mode: "select",
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
@@ -692,6 +869,7 @@ describe("validateQuery – expanded function denylist (readOnly=true)", () => {
       validateQuery({
         sql: "SELECT pg_read_file_old('pg_hba.conf', 0, 1000)",
         readOnly: true,
+        mode: "select",
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
@@ -699,21 +877,29 @@ describe("validateQuery – expanded function denylist (readOnly=true)", () => {
   // Additional ls dirs
   it("blocks pg_ls_archive_statusdir", async () => {
     await expect(
-      validateQuery({ sql: "SELECT * FROM pg_ls_archive_statusdir()", readOnly: true }),
+      validateQuery({
+        sql: "SELECT * FROM pg_ls_archive_statusdir()",
+        readOnly: true,
+        mode: "select",
+      }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
 
   // PostGIS metadata mutation
   it("blocks populate_geometry_columns", async () => {
     await expect(
-      validateQuery({ sql: "SELECT populate_geometry_columns()", readOnly: true }),
+      validateQuery({
+        sql: "SELECT populate_geometry_columns()",
+        readOnly: true,
+        mode: "select",
+      }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
 
   // pg_trgm session-level state mutation
   it("blocks set_limit", async () => {
     await expect(
-      validateQuery({ sql: "SELECT set_limit(0.1)", readOnly: true }),
+      validateQuery({ sql: "SELECT set_limit(0.1)", readOnly: true, mode: "select" }),
     ).rejects.toMatchObject({
       code: "FORBIDDEN_FUNCTION",
     });
@@ -725,6 +911,7 @@ describe("validateQuery – expanded function denylist (readOnly=true)", () => {
       validateQuery({
         sql: "SELECT addgeometrycolumn('public', 'mytable', 'geom', 4326, 'POINT', 2)",
         readOnly: true,
+        mode: "select",
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
@@ -733,6 +920,7 @@ describe("validateQuery – expanded function denylist (readOnly=true)", () => {
       validateQuery({
         sql: "SELECT dropgeometrycolumn('public', 'mytable', 'geom')",
         readOnly: true,
+        mode: "select",
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
@@ -741,6 +929,7 @@ describe("validateQuery – expanded function denylist (readOnly=true)", () => {
       validateQuery({
         sql: "SELECT dropgeometrytable('public', 'mytable')",
         readOnly: true,
+        mode: "select",
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
@@ -749,12 +938,17 @@ describe("validateQuery – expanded function denylist (readOnly=true)", () => {
       validateQuery({
         sql: "SELECT updategeometrysrid('public', 'mytable', 'geom', 4326)",
         readOnly: true,
+        mode: "select",
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
   it("blocks postgis_extensions_upgrade", async () => {
     await expect(
-      validateQuery({ sql: "SELECT postgis_extensions_upgrade()", readOnly: true }),
+      validateQuery({
+        sql: "SELECT postgis_extensions_upgrade()",
+        readOnly: true,
+        mode: "select",
+      }),
     ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
   });
 });
@@ -762,13 +956,17 @@ describe("validateQuery – expanded function denylist (readOnly=true)", () => {
 describe("validateQuery – allowlist skipped (readOnly=false)", () => {
   it("allows DELETE when readOnly=false", async () => {
     await expect(
-      validateQuery({ sql: "DELETE FROM t", readOnly: false }),
+      validateQuery({ sql: "DELETE FROM t", readOnly: false, mode: "select" }),
     ).resolves.toBeUndefined();
   });
 
   it("allows INSERT when readOnly=false", async () => {
     await expect(
-      validateQuery({ sql: "INSERT INTO t(x) VALUES (1)", readOnly: false }),
+      validateQuery({
+        sql: "INSERT INTO t(x) VALUES (1)",
+        readOnly: false,
+        mode: "select",
+      }),
     ).resolves.toBeUndefined();
   });
 });

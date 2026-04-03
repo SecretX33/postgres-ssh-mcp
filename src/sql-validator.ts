@@ -2,9 +2,9 @@ import { parse } from "pgsql-parser";
 import { walk } from "@pgsql/traverse";
 
 export class ValidationError extends Error {
-  code: string;
+  code: ValidationErrorCode;
 
-  constructor(code: string, message: string) {
+  constructor(code: ValidationErrorCode, message: string) {
     super(message);
     this.name = "ValidationError";
     this.code = code;
@@ -18,26 +18,24 @@ export class ValidationError extends Error {
  * - `PARSE_ERROR` — the SQL has a syntax error
  * - `MULTI_STATEMENT` — more than one statement was provided
  * - `FORBIDDEN_STATEMENT` — statement type is not SELECT or EXPLAIN
- * - `FORBIDDEN_EXPLAIN_TARGET` — EXPLAIN wraps a non-SELECT statement
- * - `FORBIDDEN_EXPLAIN_ANALYZE` — EXPLAIN ANALYZE actually executes the query
  * - `FORBIDDEN_NESTED_MUTATION` — DML/MERGE hidden inside a CTE
  * - `FORBIDDEN_SELECT_INTO` — SELECT INTO creates a table
  * - `FORBIDDEN_LOCKING` — FOR UPDATE/SHARE locking clause
  * - `FORBIDDEN_FUNCTION` — call to a denylisted superuser / side-effect function
  * - `FORBIDDEN_EXPLAIN_IN_QUERY` — EXPLAIN submitted via run_query instead of explain_query
+ * - `EXPLAIN_UNWRAP_REQUIRED` — sql parameter of explain_query must be a bare query, not pre-wrapped with EXPLAIN
  */
 export type ValidationErrorCode =
   | "EMPTY_QUERY"
   | "PARSE_ERROR"
   | "MULTI_STATEMENT"
   | "FORBIDDEN_STATEMENT"
-  | "FORBIDDEN_EXPLAIN_TARGET"
-  | "FORBIDDEN_EXPLAIN_ANALYZE"
   | "FORBIDDEN_NESTED_MUTATION"
   | "FORBIDDEN_SELECT_INTO"
   | "FORBIDDEN_LOCKING"
   | "FORBIDDEN_FUNCTION"
-  | "FORBIDDEN_EXPLAIN_IN_QUERY";
+  | "FORBIDDEN_EXPLAIN_IN_QUERY"
+  | "EXPLAIN_UNWRAP_REQUIRED";
 
 const ALLOWED_STATEMENT_TYPES = new Set(["SelectStmt", "ExplainStmt"]);
 
@@ -295,11 +293,11 @@ const DANGEROUS_FUNCTIONS = new Set([
 export async function validateQuery({
   sql,
   readOnly,
-  blockExplain = true,
+  mode,
 }: {
   sql: string;
   readOnly: boolean;
-  blockExplain?: boolean;
+  mode: "select" | "explain";
 }): Promise<void> {
   // Stage 2 pre-check — empty before parse
   if (sql.trim().length === 0) {
@@ -345,57 +343,24 @@ export async function validateQuery({
   }
 
   // Stage 3b — EXPLAIN inner check
-  if (stmtType === "ExplainStmt" && blockExplain) {
-    throw new ValidationError(
-      "FORBIDDEN_EXPLAIN_IN_QUERY",
-      "Use the explain_query tool for EXPLAIN statements",
-    );
-  }
   if (stmtType === "ExplainStmt") {
-    const explainNode = stmtNode["ExplainStmt"] as Record<string, unknown>;
-    const innerStmt = explainNode["query"] as Record<string, unknown> | undefined;
-    const innerType = innerStmt ? Object.keys(innerStmt)[0] : undefined;
-    if (innerType !== "SelectStmt") {
-      throw new ValidationError(
-        "FORBIDDEN_EXPLAIN_TARGET",
-        "EXPLAIN is only allowed for SELECT statements",
-      );
-    }
+    switch (mode) {
+      case "select":
+        throw new ValidationError(
+          "FORBIDDEN_EXPLAIN_IN_QUERY",
+          "Use the explain_query tool for EXPLAIN statements",
+        );
 
-    // EXPLAIN ANALYZE actually executes the query — block it.
-    // EXPLAIN (ANALYZE FALSE) / EXPLAIN (ANALYZE OFF) do NOT execute; only block
-    // when the arg is absent (bare ANALYZE = implicit TRUE) or explicitly true/on.
-    const options = (explainNode["options"] as unknown[] | undefined) ?? [];
-    const hasAnalyze = options.some((opt) => {
-      const elem = (
-        opt as {
-          DefElem?: {
-            defname?: string;
-            arg?: {
-              String?: { sval?: string };
-              Integer?: { ival?: number };
-              Boolean?: { boolval?: boolean };
-            };
-          };
-        }
-      ).DefElem;
-      if (elem?.defname !== "analyze") return false;
-      if (!elem.arg) return true; // bare EXPLAIN ANALYZE — implicit TRUE
-      const sval = elem.arg.String?.sval?.toLowerCase();
-      if (sval === "true" || sval === "on") return true;
-      if (sval === "false" || sval === "off") return false;
-      const ival = elem.arg.Integer?.ival;
-      if (ival !== undefined) return ival !== 0;
-      const bval = elem.arg.Boolean?.boolval;
-      if (bval !== undefined) return bval === true;
-      // Unknown arg node type — block conservatively
-      return true;
-    });
-    if (hasAnalyze) {
-      throw new ValidationError(
-        "FORBIDDEN_EXPLAIN_ANALYZE",
-        "EXPLAIN ANALYZE is not allowed in read-only mode (it executes the query)",
-      );
+      case "explain":
+        throw new ValidationError(
+          "EXPLAIN_UNWRAP_REQUIRED",
+          "The 'sql' parameter must be a bare query without EXPLAIN — do not wrap it with EXPLAIN or any options " +
+            "(e.g. ANALYZE, BUFFERS). Pass just the SELECT statement; the tool adds the EXPLAIN prefix automatically " +
+            "using the dedicated parameters (analyze, buffers, format, etc.).",
+        );
+
+      default:
+        throw new Error(`Invalid mode ${mode as never}`);
     }
   }
 

@@ -14,7 +14,9 @@ import {
 import {
   createDatabasePool,
   type DatabaseMetadata,
+  type ExplainOptions,
   EXPLAIN_FORMAT_SCHEMA,
+  SERIALIZE_SCHEMA,
   fetchDatabaseMetadataAsync,
   getConnectionStatus,
   runDescribeTable,
@@ -71,15 +73,74 @@ export function buildServer({
       "explain_query",
       {
         description:
-          "Get the execution plan for a SQL query. Returns the EXPLAIN output in the specified format.",
+          "Get the execution plan for a SQL query. Returns the EXPLAIN output in the specified format. Supports all PostgreSQL EXPLAIN options including ANALYZE for real execution statistics.",
         inputSchema: z.object({
-          sql: z.string().describe("The SQL query to explain"),
+          sql: z
+            .string()
+            .describe(
+              "The bare SQL query (e.g. `SELECT ...`) to explain - do not prefix it with 'EXPLAIN'",
+            ),
           format: EXPLAIN_FORMAT_SCHEMA.default("text").describe(
             "Output format for the execution plan",
           ),
+          analyze: z
+            .boolean()
+            .optional()
+            .describe(
+              "Execute the query and show actual runtime statistics (timing, rows). The query runs inside a read-only transaction.",
+            ),
+          verbose: z
+            .boolean()
+            .optional()
+            .describe(
+              "Show additional detail including output column lists and schema-qualified names",
+            ),
+          costs: z
+            .boolean()
+            .optional()
+            .describe(
+              "Show estimated startup and total cost for each plan node. Default: true",
+            ),
+          settings: z
+            .boolean()
+            .optional()
+            .describe("Show non-default planner configuration parameters"),
+          generic_plan: z
+            .boolean()
+            .optional()
+            .describe(
+              "Generate a generic plan with $N parameter placeholders. Cannot be used with analyze.",
+            ),
+          buffers: z
+            .boolean()
+            .optional()
+            .describe(
+              "Show buffer usage statistics (shared/local/temp hit/read/written). Most useful with analyze.",
+            ),
+          serialize: SERIALIZE_SCHEMA.optional().describe(
+            "Include serialization overhead measurement. Requires analyze.",
+          ),
+          wal: z
+            .boolean()
+            .optional()
+            .describe("Show WAL record generation statistics. Requires analyze."),
+          timing: z
+            .boolean()
+            .optional()
+            .describe(
+              "Show actual time per plan node. Requires analyze. Default: true when analyze is on.",
+            ),
+          summary: z
+            .boolean()
+            .optional()
+            .describe("Show summary information such as planning and execution time"),
+          memory: z.boolean().optional().describe("Show planner memory consumption"),
         }),
       },
-      ({ sql, format }) => runExplainQuery(poolRef.current, sql, readOnly, format),
+      ({ sql, format, ...rest }) => {
+        const options: ExplainOptions = { format, ...rest };
+        return runExplainQuery(poolRef.current, sql, readOnly, options);
+      },
     );
   }
 

@@ -12,6 +12,63 @@ export const EXPLAIN_FORMATS = ["text", "json", "yaml", "xml"] as const;
 export const EXPLAIN_FORMAT_SCHEMA = z.enum(EXPLAIN_FORMATS);
 export type ExplainFormat = z.infer<typeof EXPLAIN_FORMAT_SCHEMA>;
 
+export const SERIALIZE_VALUES = ["none", "text", "binary"] as const;
+export const SERIALIZE_SCHEMA = z.enum(SERIALIZE_VALUES);
+export type SerializeValue = z.infer<typeof SERIALIZE_SCHEMA>;
+
+export interface ExplainOptions {
+  analyze?: boolean;
+  verbose?: boolean;
+  costs?: boolean;
+  settings?: boolean;
+  generic_plan?: boolean;
+  buffers?: boolean;
+  serialize?: SerializeValue;
+  wal?: boolean;
+  timing?: boolean;
+  summary?: boolean;
+  memory?: boolean;
+  format?: ExplainFormat;
+}
+
+/**
+ * Builds the `EXPLAIN (...)` prefix from the provided options.
+ * Only explicitly provided options are included in the clause.
+ * FORMAT defaults to TEXT if not specified.
+ */
+export function buildExplainPrefix(options: ExplainOptions): string {
+  const parts: string[] = [];
+
+  const booleanOptions: { key: keyof ExplainOptions; sql: string }[] = [
+    { key: "analyze", sql: "ANALYZE" },
+    { key: "verbose", sql: "VERBOSE" },
+    { key: "costs", sql: "COSTS" },
+    { key: "settings", sql: "SETTINGS" },
+    { key: "generic_plan", sql: "GENERIC_PLAN" },
+    { key: "buffers", sql: "BUFFERS" },
+    { key: "wal", sql: "WAL" },
+    { key: "timing", sql: "TIMING" },
+    { key: "summary", sql: "SUMMARY" },
+    { key: "memory", sql: "MEMORY" },
+  ];
+
+  for (const { key, sql } of booleanOptions) {
+    const val = options[key];
+    if (typeof val === "boolean") {
+      parts.push(`${sql} ${val ? "TRUE" : "FALSE"}`);
+    }
+  }
+
+  if (options.serialize && options.serialize !== "none") {
+    parts.push(`SERIALIZE ${options.serialize.toUpperCase()}`);
+  }
+
+  const format = (options.format ?? "text").toUpperCase();
+  parts.push(`FORMAT ${format}`);
+
+  return `EXPLAIN (${parts.join(", ")})`;
+}
+
 export interface DatabaseMetadata {
   version: string | null;
   databaseSize: string | null;
@@ -24,7 +81,11 @@ export async function runQuery(
   maxRows: number,
   params?: (string | number | boolean | null)[],
 ): Promise<ToolResult> {
-  const validationError = await validateUserProvidedQuery({ sql, readOnly });
+  const validationError = await validateUserProvidedQuery({
+    sql,
+    readOnly,
+    mode: "select",
+  });
   if (validationError) return validationError;
 
   return await withClient({
@@ -73,16 +134,16 @@ export async function runExplainQuery(
   pool: Pool,
   sql: string,
   readOnly: boolean,
-  format: ExplainFormat,
+  options: ExplainOptions,
 ): Promise<ToolResult> {
   const validationError = await validateUserProvidedQuery({
     sql,
     readOnly,
-    blockExplain: false,
+    mode: "explain",
   });
   if (validationError) return validationError;
 
-  const explainSql = `EXPLAIN (FORMAT ${format.toUpperCase()}) ${sql}`;
+  const explainSql = `${buildExplainPrefix(options)} ${sql}`;
 
   return doRunQuery({
     pool,
