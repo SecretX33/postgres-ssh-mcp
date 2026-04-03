@@ -66,23 +66,25 @@ claude mcp add --transport stdio postgres-ssh-mcp \
 
 ## Tools
 
-| Tool                    | Description                                                              |
-|-------------------------|--------------------------------------------------------------------------|
-| `run_query`             | Execute a SQL query (read-only by default; see `DB_READ_ONLY`). Supports parameterized queries with `$1, $2, ...` placeholders |
-| `explain_query`         | Get the execution plan for a SQL query. Pass the bare query (e.g. `SELECT ...`) — do not prefix it with `EXPLAIN`. Supports all PostgreSQL EXPLAIN options (ANALYZE, VERBOSE, COSTS, SETTINGS, GENERIC_PLAN, BUFFERS, WAL, TIMING, SUMMARY, MEMORY, SERIALIZE) and output formats (text, JSON, YAML, XML) |
-| `list_schemas`          | List all schemas in the database                                         |
-| `list_tables`           | List tables in a schema (default: `public`)                              |
-| `describe_table`        | Show columns, types, and nullability for a table                         |
-| `get_connection_status` | Show connection pool stats, database version, size, and server configuration |
+| Tool                    | Description                                                                                                                                                |
+|-------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `run_query`             | Execute a SQL query (read-only by default; see `DB_READ_ONLY`). Supports parameterized queries with `$1, $2, ...` placeholders                             |
+| `explain_query`         | Get the execution plan for a SQL query. Supports all PostgreSQL EXPLAIN options (ANALYZE, BUFFERS, TIMING, etc) and output formats (text, JSON, YAML, XML) |
+| `list_schemas`          | List all schemas in the database                                                                                                                           |
+| `list_tables`           | List tables in a schema (default: `public`)                                                                                                                |
+| `describe_table`        | Show columns, types, and nullability for a table                                                                                                           |
+| `get_connection_status` | Show connection pool stats, database version, size, and server configuration                                                                               |
 
-## Query Safety
+## Defense-in-Depth Query Safety
 
-When `DB_READ_ONLY=true` (the default), queries go through multiple safety layers:
+This is the key feature that sets `postgres-ssh-mcp` apart from other PostgreSQL MCP servers. It is the only one that enforces multi-layered protection against unintended data modifications through a combination of safety mechanisms.
 
 1. **AST-level SQL validation** using `pgsql-parser` and `@pgsql/traverse` — parses SQL into an abstract syntax tree and walks it to detect mutations, including hidden ones in CTEs, `SELECT INTO`, and locking clauses. Only `SELECT` and `EXPLAIN` statements are allowed.
 2. **Dangerous function denylist** — blocks 250+ PostgreSQL functions that can cause side effects even inside read-only transactions, including `pg_sleep`, `nextval`, `pg_notify`, file I/O functions, advisory locks, and replication controls.
 3. **Read-only transaction wrapping** — all queries execute inside `BEGIN TRANSACTION READ ONLY` with automatic `ROLLBACK`.
 4. **Single-statement enforcement** — multi-statement queries are rejected before execution.
+
+_**Note:** Disabling these safety mechanisms is not recommended, however, you can do so by setting `DB_READ_ONLY=false`, which grants AI tools full write access to the database._
 
 ## Environment Variables
 
