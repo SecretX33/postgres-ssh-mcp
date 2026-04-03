@@ -125,24 +125,24 @@ describe("validateQuery – EXPLAIN inner check (readOnly=true)", () => {
 });
 
 describe("validateQuery – EXPLAIN ANALYZE (readOnly=true)", () => {
-  it("rejects EXPLAIN ANALYZE SELECT", async () => {
+  it("accepts EXPLAIN ANALYZE SELECT when blockExplain is false (explain_query path)", async () => {
     await expect(
       validateQuery({
         sql: "EXPLAIN ANALYZE SELECT 1",
         readOnly: true,
         blockExplain: false,
       }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN_EXPLAIN_ANALYZE" });
+    ).resolves.toBeUndefined();
   });
 
-  it("rejects EXPLAIN (ANALYZE, BUFFERS) SELECT", async () => {
+  it("accepts EXPLAIN (ANALYZE, BUFFERS) SELECT when blockExplain is false", async () => {
     await expect(
       validateQuery({
         sql: "EXPLAIN (ANALYZE, BUFFERS) SELECT * FROM t",
         readOnly: true,
         blockExplain: false,
       }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN_EXPLAIN_ANALYZE" });
+    ).resolves.toBeUndefined();
   });
 
   it("accepts plain EXPLAIN SELECT", async () => {
@@ -173,6 +173,45 @@ describe("validateQuery – EXPLAIN ANALYZE (readOnly=true)", () => {
         blockExplain: false,
       }),
     ).resolves.toBeUndefined();
+  });
+
+  it("rejects EXPLAIN ANALYZE DELETE (DML target) even with blockExplain false", async () => {
+    await expect(
+      validateQuery({
+        sql: "EXPLAIN ANALYZE DELETE FROM t",
+        readOnly: true,
+        blockExplain: false,
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN_EXPLAIN_TARGET" });
+  });
+
+  it("rejects EXPLAIN ANALYZE SELECT with forbidden function", async () => {
+    await expect(
+      validateQuery({
+        sql: "EXPLAIN ANALYZE SELECT pg_read_file('/etc/passwd', 0, 100)",
+        readOnly: true,
+        blockExplain: false,
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN_FUNCTION" });
+  });
+
+  it("rejects EXPLAIN ANALYZE via run_query (blockExplain true)", async () => {
+    await expect(
+      validateQuery({
+        sql: "EXPLAIN ANALYZE SELECT 1",
+        readOnly: true,
+        blockExplain: true,
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN_EXPLAIN_IN_QUERY" });
+  });
+
+  it("rejects EXPLAIN ANALYZE via run_query (blockExplain default)", async () => {
+    await expect(
+      validateQuery({
+        sql: "EXPLAIN ANALYZE SELECT 1",
+        readOnly: true,
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN_EXPLAIN_IN_QUERY" });
   });
 });
 

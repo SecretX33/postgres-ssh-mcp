@@ -4,6 +4,7 @@ import * as fs from "node:fs";
 import {
   runQuery,
   runExplainQuery,
+  buildExplainPrefix,
   runSchemaQuery,
   runListTables,
   runDescribeTable,
@@ -573,7 +574,9 @@ describe("runExplainQuery", () => {
     const { pool, client } = makePool(() =>
       Promise.resolve(makeResult([{ "QUERY PLAN": "Seq Scan on t" }])),
     );
-    const result = await runExplainQuery(pool, "SELECT 1", false, "text");
+    const result = await runExplainQuery(pool, "SELECT 1", false, {
+      format: "text",
+    });
     expect(result.isError).toBeUndefined();
     expect(client.query).toHaveBeenCalledWith("EXPLAIN (FORMAT TEXT) SELECT 1");
     expect((result.content[0] as { text: string }).text).toBe("Seq Scan on t");
@@ -584,7 +587,9 @@ describe("runExplainQuery", () => {
     const { pool } = makePool(() =>
       Promise.resolve(makeResult([{ "QUERY PLAN": planJson }])),
     );
-    const result = await runExplainQuery(pool, "SELECT 1", false, "json");
+    const result = await runExplainQuery(pool, "SELECT 1", false, {
+      format: "json",
+    });
     expect(result.isError).toBeUndefined();
     expect((result.content[0] as { text: string }).text).toBe(planJson);
   });
@@ -594,7 +599,9 @@ describe("runExplainQuery", () => {
     const { pool } = makePool(() =>
       Promise.resolve(makeResult([{ "QUERY PLAN": planData }])),
     );
-    const result = await runExplainQuery(pool, "SELECT 1", false, "json");
+    const result = await runExplainQuery(pool, "SELECT 1", false, {
+      format: "json",
+    });
     expect(result.isError).toBeUndefined();
     const text = (result.content[0] as { text: string }).text;
     expect(JSON.parse(text)).toEqual(planData);
@@ -604,7 +611,7 @@ describe("runExplainQuery", () => {
     const { pool, client } = makePool(() =>
       Promise.resolve(makeResult([{ "QUERY PLAN": "- Plan:" }])),
     );
-    await runExplainQuery(pool, "SELECT 1", false, "yaml");
+    await runExplainQuery(pool, "SELECT 1", false, { format: "yaml" });
     expect(client.query).toHaveBeenCalledWith("EXPLAIN (FORMAT YAML) SELECT 1");
   });
 
@@ -612,8 +619,22 @@ describe("runExplainQuery", () => {
     const { pool, client } = makePool(() =>
       Promise.resolve(makeResult([{ "QUERY PLAN": "<explain>" }])),
     );
-    await runExplainQuery(pool, "SELECT 1", false, "xml");
+    await runExplainQuery(pool, "SELECT 1", false, { format: "xml" });
     expect(client.query).toHaveBeenCalledWith("EXPLAIN (FORMAT XML) SELECT 1");
+  });
+
+  it("constructs EXPLAIN with ANALYZE and BUFFERS", async () => {
+    const { pool, client } = makePool(() =>
+      Promise.resolve(makeResult([{ "QUERY PLAN": "Seq Scan (actual time=...)" }])),
+    );
+    await runExplainQuery(pool, "SELECT 1", false, {
+      analyze: true,
+      buffers: true,
+      format: "text",
+    });
+    expect(client.query).toHaveBeenCalledWith(
+      "EXPLAIN (ANALYZE TRUE, BUFFERS TRUE, FORMAT TEXT) SELECT 1",
+    );
   });
 
   it("joins multiple QUERY PLAN rows for text format", async () => {
@@ -625,22 +646,112 @@ describe("runExplainQuery", () => {
         ]),
       ),
     );
-    const result = await runExplainQuery(pool, "SELECT * FROM t", false, "text");
+    const result = await runExplainQuery(pool, "SELECT * FROM t", false, {
+      format: "text",
+    });
     const text = (result.content[0] as { text: string }).text;
     expect(text).toBe("Seq Scan on t\n  Filter: (id > 1)");
   });
 
   it("validates SQL and returns error for DML in read-only mode", async () => {
     const { pool } = makePool(() => Promise.resolve(makeResult([])));
-    const result = await runExplainQuery(pool, "DELETE FROM t", true, "text");
+    const result = await runExplainQuery(pool, "DELETE FROM t", true, {
+      format: "text",
+    });
     expect(result.isError).toBe(true);
   });
 
   it("returns error when explain query throws", async () => {
     const { pool } = makePool(() => Promise.reject(new Error("explain failed")));
-    const result = await runExplainQuery(pool, "SELECT 1", false, "text");
+    const result = await runExplainQuery(pool, "SELECT 1", false, {
+      format: "text",
+    });
     expect(result.isError).toBe(true);
     expect((result.content[0] as { text: string }).text).toContain("explain failed");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildExplainPrefix
+// ---------------------------------------------------------------------------
+
+describe("buildExplainPrefix", () => {
+  it("returns EXPLAIN (FORMAT TEXT) with no options", () => {
+    expect(buildExplainPrefix({})).toBe("EXPLAIN (FORMAT TEXT)");
+  });
+
+  it("returns EXPLAIN (FORMAT TEXT) with only format specified", () => {
+    expect(buildExplainPrefix({ format: "text" })).toBe("EXPLAIN (FORMAT TEXT)");
+  });
+
+  it("includes ANALYZE TRUE when analyze is true", () => {
+    expect(buildExplainPrefix({ analyze: true })).toBe(
+      "EXPLAIN (ANALYZE TRUE, FORMAT TEXT)",
+    );
+  });
+
+  it("includes ANALYZE FALSE when analyze is explicitly false", () => {
+    expect(buildExplainPrefix({ analyze: false })).toBe(
+      "EXPLAIN (ANALYZE FALSE, FORMAT TEXT)",
+    );
+  });
+
+  it("includes multiple boolean options in order", () => {
+    expect(buildExplainPrefix({ analyze: true, buffers: true, format: "text" })).toBe(
+      "EXPLAIN (ANALYZE TRUE, BUFFERS TRUE, FORMAT TEXT)",
+    );
+  });
+
+  it("includes all boolean options when provided", () => {
+    const result = buildExplainPrefix({
+      analyze: true,
+      verbose: true,
+      costs: false,
+      settings: true,
+      generic_plan: false,
+      buffers: true,
+      wal: true,
+      timing: false,
+      summary: true,
+      memory: true,
+      format: "json",
+    });
+    expect(result).toBe(
+      "EXPLAIN (ANALYZE TRUE, VERBOSE TRUE, COSTS FALSE, SETTINGS TRUE, GENERIC_PLAN FALSE, BUFFERS TRUE, WAL TRUE, TIMING FALSE, SUMMARY TRUE, MEMORY TRUE, FORMAT JSON)",
+    );
+  });
+
+  it("includes SERIALIZE TEXT when serialize is text", () => {
+    expect(buildExplainPrefix({ serialize: "text" })).toBe(
+      "EXPLAIN (SERIALIZE TEXT, FORMAT TEXT)",
+    );
+  });
+
+  it("includes SERIALIZE BINARY when serialize is binary", () => {
+    expect(buildExplainPrefix({ serialize: "binary" })).toBe(
+      "EXPLAIN (SERIALIZE BINARY, FORMAT TEXT)",
+    );
+  });
+
+  it("omits SERIALIZE when serialize is none", () => {
+    expect(buildExplainPrefix({ serialize: "none" })).toBe("EXPLAIN (FORMAT TEXT)");
+  });
+
+  it("handles format variants", () => {
+    expect(buildExplainPrefix({ format: "json" })).toBe("EXPLAIN (FORMAT JSON)");
+    expect(buildExplainPrefix({ format: "yaml" })).toBe("EXPLAIN (FORMAT YAML)");
+    expect(buildExplainPrefix({ format: "xml" })).toBe("EXPLAIN (FORMAT XML)");
+  });
+
+  it("combines analyze, buffers, serialize, and format", () => {
+    expect(
+      buildExplainPrefix({
+        analyze: true,
+        buffers: true,
+        serialize: "binary",
+        format: "json",
+      }),
+    ).toBe("EXPLAIN (ANALYZE TRUE, BUFFERS TRUE, SERIALIZE BINARY, FORMAT JSON)");
   });
 });
 
@@ -829,14 +940,18 @@ describe("structuredContent", () => {
     const { pool } = makePool(() =>
       Promise.resolve(makeResult([{ "QUERY PLAN": "Seq Scan on t" }])),
     );
-    const result = await runExplainQuery(pool, "SELECT 1", false, "text");
+    const result = await runExplainQuery(pool, "SELECT 1", false, {
+      format: "text",
+    });
     expect(result.structuredContent).toBeUndefined();
     expect((result.content[0] as { text: string }).text).toBe("Seq Scan on t");
   });
 
   it("runExplainQuery does not return structuredContent on error", async () => {
     const { pool } = makePool(() => Promise.reject(new Error("fail")));
-    const result = await runExplainQuery(pool, "SELECT 1", false, "text");
+    const result = await runExplainQuery(pool, "SELECT 1", false, {
+      format: "text",
+    });
     expect(result.isError).toBe(true);
     expect(result.structuredContent).toBeUndefined();
   });

@@ -391,10 +391,10 @@ export async function validateQuery({
       // Unknown arg node type — block conservatively
       return true;
     });
-    if (hasAnalyze) {
+    if (hasAnalyze && blockExplain) {
       throw new ValidationError(
         "FORBIDDEN_EXPLAIN_ANALYZE",
-        "EXPLAIN ANALYZE is not allowed in read-only mode (it executes the query)",
+        "EXPLAIN ANALYZE is not allowed via run_query (use the explain_query tool instead)",
       );
     }
   }
