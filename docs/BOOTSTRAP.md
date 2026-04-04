@@ -1,5 +1,5 @@
 
-This project is a template of an MCP server. Its original purposes doesn't matter, you need to edit @src/server.ts file to create an MCP server that
+This project is a template of an MCP server. Its original purposes doesn't matter, you need to edit @src/index.ts file to create an MCP server that
 
 # Instructions
 - Create a new MCP server that connects to a remote postgres database, and exposes a tool that allows LLMs to execute SQL queries against the database and get the results. The tool would be extremely simple: accept a query as a string, execute it, and return the results. If something goes wrong, the tool should return an error message
