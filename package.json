@@ -1,9 +1,25 @@
 {
   "name": "postgres-ssh-mcp",
+  "type": "module",
   "version": "0.0.0",
   "description": "MCP server for Postgres (with SSH tunnel support)",
-  "type": "module",
-  "main": "dist/server.js",
+  "author": "SecretX33 <notyetmidnight@gmail.com>",
+  "license": "MIT",
+  "homepage": "https://github.com/SecretX33/postgres-ssh-mcp#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SecretX33/postgres-ssh-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/SecretX33/postgres-ssh-mcp/issues"
+  },
+  "bin": {
+    "postgres-ssh-mcp": "dist/index.js"
+  },
+  "exports": {
+    ".": "./dist/index.js",
+    "./package.json": "./package.json"
+  },
   "files": [
     "dist",
     "README.md",
@@ -15,24 +31,11 @@
     "postgres",
     "ssh"
   ],
-  "author": "SecretX33",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/SecretX33/postgres-ssh-mcp.git"
-  },
-  "bugs": {
-    "url": "https://github.com/SecretX33/postgres-ssh-mcp/issues"
-  },
-  "homepage": "https://github.com/SecretX33/postgres-ssh-mcp#readme",
-  "bin": {
-    "postgres-ssh-mcp": "dist/server.js"
-  },
   "scripts": {
-    "build": "tsc",
-    "build:watch": "tsc -w",
-    "dev": "dotenv -v NODE_ENV=development -- nodemon --watch src --watch .env --ext ts --exec \"tsc && node dist/server.js\"",
-    "start": "node dist/server.js",
+    "build": "tsdown",
+    "build:watch": "tsdown --watch --env.NODE_ENV=development",
+    "dev": "concurrently \"tsdown --watch --env.NODE_ENV=development\" \"node --watch dist/index.js\"",
+    "start": "node dist/index.js",
     "test": "vitest run",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
     "format": "prettier --check --cache src tests",
@@ -41,7 +44,6 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.27.1",
     "@pgsql/traverse": "17.2.4",
-    "dotenv": "17.3.1",
     "pg": "8.20.0",
     "pgsql-parser": "17.9.12",
     "tunnel-ssh": "5.2.0",
@@ -51,10 +53,10 @@
     "@types/node": "25.4.0",
     "@types/pg": "8.18.0",
     "@types/ssh2": "1.15.5",
-    "dotenv-cli": "11.0.0",
-    "nodemon": "3.1.14",
+    "@typescript/native-preview": "7.0.0-dev.20260328.1",
+    "concurrently": "9.2.1",
     "prettier": "3.8.1",
-    "typescript": "5.9.3",
+    "tsdown": "0.21.6",
     "vitest": "4.0.18"
   }
 }

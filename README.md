@@ -139,7 +139,7 @@ npm install
 npm run build
 ```
 
-The compiled server is written to `dist/server.js`.
+The compiled server is written to `dist/index.js`.
 
 Copy the example env file and fill in your values:
 

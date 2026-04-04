@@ -42,7 +42,7 @@ vi.mock("@modelcontextprotocol/sdk/server/stdio.js", () => ({
 }));
 vi.mock("pg", () => ({ Pool: vi.fn(() => ({ on: vi.fn(), end: vi.fn() })) }));
 
-import { buildServer } from "../src/server.js";
+import { buildServer } from "../src";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   runQuery,

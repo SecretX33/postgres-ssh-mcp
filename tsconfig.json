@@ -6,7 +6,7 @@
 
     /* Bundler mode */
     "moduleResolution": "bundler",
-    "outDir": "dist",
+    "noEmit": true,
     "esModuleInterop": true,
     "isolatedModules": true,
     "allowSyntheticDefaultImports": true,

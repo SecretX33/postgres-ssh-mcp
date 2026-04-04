@@ -19,7 +19,7 @@ pnpm dev              # Watch mode with .env loaded (requires .env file)
 
 An MCP (Model Context Protocol) server that lets AI tools query PostgreSQL databases, optionally through an SSH tunnel. Runs over stdio transport.
 
-**Entrypoint:** `src/server.ts` — loads env, optionally opens an SSH tunnel, creates a `pg.Pool`, registers MCP tools (`run_query`, `list_schemas`, `list_tables`, `describe_table`), and connects via `StdioServerTransport`.
+**Entrypoint:** `src/index.ts` — loads env, optionally opens an SSH tunnel, creates a `pg.Pool`, registers MCP tools (`run_query`, `list_schemas`, `list_tables`, `describe_table`), and connects via `StdioServerTransport`.
 
 **Key modules:**
 

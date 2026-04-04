@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import dotenv from "dotenv";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -14,9 +13,8 @@ import {
 import {
   createDatabasePool,
   type DatabaseMetadata,
-  type ExplainOptions,
   EXPLAIN_FORMAT_SCHEMA,
-  SERIALIZE_SCHEMA,
+  type ExplainOptions,
   fetchDatabaseMetadataAsync,
   getConnectionStatus,
   runDescribeTable,
@@ -24,6 +22,7 @@ import {
   runListTables,
   runQuery,
   runSchemaQuery,
+  SERIALIZE_SCHEMA,
 } from "./database.js";
 
 export function buildServer({
@@ -194,9 +193,6 @@ export function buildServer({
 }
 
 async function main() {
-  if (process.env.NODE_ENV && process.env.NODE_ENV !== "production") {
-    dotenv.config();
-  }
   console.error(`Starting Postgres SSH MCP server version ${PROJECT_INFO.version}...`);
 
   const env = loadEnvOrExit();
