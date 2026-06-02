@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 pnpm install          # Install dependencies
-pnpm build            # Compile TypeScript (tsc → dist/)
+pnpm build            # Bundle with tsdown (→ dist/)
 pnpm test             # Run all tests (vitest)
 pnpm test -- tests/sql-validator.test.ts  # Run a single test file
 pnpm typecheck        # Type-check without emitting
