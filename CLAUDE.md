@@ -12,7 +12,7 @@ pnpm test -- tests/sql-validator.test.ts  # Run a single test file
 pnpm typecheck        # Type-check without emitting
 pnpm format           # Check formatting (prettier)
 pnpm format:write     # Auto-fix formatting
-pnpm dev              # Watch mode with .env loaded (requires .env file)
+pnpm dev              # Watch mode, rebuild on changes (tsdown)
 ```
 
 ## Architecture
