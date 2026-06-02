@@ -2,7 +2,7 @@ import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import * as fs from "node:fs";
 
-// Load name/version from package.json (works from build/ after tsc)
+// Load name/version from package.json (works from dist/ after tsc)
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export const PROJECT_INFO = JSON.parse(
