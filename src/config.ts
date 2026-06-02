@@ -31,7 +31,9 @@ function convertEmptyToUndefined<T>(value: T | null | undefined): T | undefined 
 
 export const EnvSchema = z
   .object({
-    ALLOWED_TOOLS: CommaSeparatedList.pipe(z.array(z.enum(TOOL_NAMES)).optional()),
+    ALLOWED_TOOLS: CommaSeparatedList.optional().pipe(
+      z.array(z.enum(TOOL_NAMES)).optional(),
+    ),
     DB_HOST: NonEmptyString,
     DB_PORT: z.coerce.number().int().min(1).max(65535).default(5432),
     DB_NAME: NonEmptyString,
